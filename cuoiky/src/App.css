@@ -1,38 +1,117 @@
-.App {
-  text-align: center;
+/* Đặt lại mặc định và cài đặt màu sắc (Biến CSS) */
+:root {
+  --primary-color: #2563eb; /* Xanh dương đậm chuẩn giáo dục */
+  --primary-hover: #1d4ed8;
+  --bg-color: #f3f4f6; /* Xám nhạt làm nền */
+  --text-dark: #1f2937;
+  --text-light: #6b7280;
+  --white: #ffffff;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+body {
+  background-color: var(--bg-color);
+  color: var(--text-dark);
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+/* KHUNG GIAO DIỆN CHUNG (LAYOUT) */
+.app-layout {
   display: flex;
   flex-direction: column;
+  min-height: 100vh; /* Giữ footer luôn ở dưới cùng */
+}
+
+.main-content {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 80px auto 40px; /* Cách navbar phía trên */
+  padding: 20px;
+}
+
+/* NAVBAR (THANH ĐIỀU HƯỚNG MÀU TRẮNG ĐỔ BÓNG) */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 64px;
+  background-color: var(--white);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  justify-content: space-between;
+  padding: 0 40px;
+  z-index: 1000;
 }
 
-.App-link {
-  color: #61dafb;
+.nav-logo {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary-color);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.nav-links {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+}
+
+.nav-item {
+  text-decoration: none;
+  color: var(--text-dark);
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.nav-item:hover, .nav-item.active {
+  color: var(--primary-color);
+}
+
+.btn-login {
+  background-color: var(--primary-color);
+  color: var(--white) !important;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.btn-login:hover {
+  background-color: var(--primary-hover);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
+
+/* FOOTER (CHÂN TRANG) */
+.footer {
+  background-color: var(--white);
+  text-align: center;
+  padding: 20px;
+  color: var(--text-light);
+  border-top: 1px solid #e5e7eb;
+  font-size: 14px;
+}
+
+/* CARD VÍ DỤ CHO TRANG CHỦ */
+.welcome-card {
+  background-color: var(--white);
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  margin-top: 20px;
+}
+.welcome-card h1 {
+  color: var(--primary-color);
+  margin-bottom: 10px;
 }
