@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
 
+const authRoutes = require('./routes/authRoutes');
+
 dotenv.config();
 
 const app = express();
@@ -16,9 +18,11 @@ mongoose.connect(process.env.MONGO_URI)
   .catch((err) => console.error('❌ Lỗi kết nối MongoDB:', err));
 
 app.get('/', (req, res) => {
-  res.send('API QuizMaster đang chạy...');
+    res.send('API QuizMaster đang chạy...');
 });
 
+app.use('/api/auth', authRoutes);
+
 app.listen(PORT, () => {
-  console.log(`🚀 Server đang chạy trên cổng ${PORT}`);
+    console.log(`🚀 Server đang chạy trên cổng ${PORT}`);
 });
