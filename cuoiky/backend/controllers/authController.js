@@ -42,6 +42,9 @@ const login = async (req, res) => {
         if (!user) {
             return res.status(400).json({ message: 'Email hoặc mật khẩu không chính xác!' });
         }
+        if (!user.isActive) {
+            return res.status(403).json({ message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin!' });
+        }
 
         // Kiểm tra mật khẩu khớp nhau qua bcrypt
         const isMatch = await bcrypt.compare(password, user.password);
