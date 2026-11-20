@@ -8,11 +8,29 @@ const mockQuestions = [
 ];
 
 const ExamRoom = () => {
-  const [timeLeft, setTimeLeft] = useState(3600);
+  // 1. Lấy thời gian đã lưu (nếu có), không thì mặc định 3600 giây
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const savedTime = localStorage.getItem('thoi_gian_thi');
+    return savedTime ? Number(savedTime) : 3600;
+  });
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+
   
+  const [answers, setAnswers] = useState(() => {
+    const savedAnswers = localStorage.getItem('nhap_bai_thi');
+    return savedAnswers ? JSON.parse(savedAnswers) : {};
+  });
+
+  useEffect(() => {
+    localStorage.setItem('nhap_bai_thi', JSON.stringify(answers));
+  }, [answers]);
+
   
-  const [currentIndex, setCurrentIndex] = useState(0); 
-  const [answers, setAnswers] = useState({}); 
+  useEffect(() => {
+    localStorage.setItem('thoi_gian_thi', timeLeft);
+  }, [timeLeft]);
+  
 
   
   useEffect(() => {
