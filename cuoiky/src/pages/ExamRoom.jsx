@@ -8,7 +8,7 @@ const mockQuestions = [
 ];
 
 const ExamRoom = () => {
-  // 1. Lấy thời gian đã lưu (nếu có), không thì mặc định 3600 giây
+ 
   const [timeLeft, setTimeLeft] = useState(() => {
     const savedTime = localStorage.getItem('thoi_gian_thi');
     return savedTime ? Number(savedTime) : 3600;
@@ -31,13 +31,19 @@ const ExamRoom = () => {
     localStorage.setItem('thoi_gian_thi', timeLeft);
   }, [timeLeft]);
   
-
+const [isSubmitted, setIsSubmitted] = useState(false);
   
   useEffect(() => {
-    if (timeLeft <= 0) return;
+    if (isSubmitted) return;
+
+    if (timeLeft <= 0) {
+      handleSubmit(true);
+      return;
+    }
+
     const timerId = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
     return () => clearInterval(timerId);
-  }, [timeLeft]);
+  }, [timeLeft, isSubmitted]);
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
@@ -52,6 +58,28 @@ const ExamRoom = () => {
       [currentQuestion.id]: option
     });
   };
+
+  const handleSubmit = (isAuto = false) => {
+    if (!isAuto) {
+      const confirmSubmit = window.confirm("Bạn có chắc chắn muốn nộp bài không?");
+      if (!confirmSubmit) return;
+    }
+
+    setIsSubmitted(true);
+    localStorage.removeItem('nhap_bai_thi');
+    localStorage.removeItem('thoi_gian_thi');
+    
+  };
+
+  if (isSubmitted) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', maxWidth: '600px', margin: '40px auto', border: '1px solid #ddd', borderRadius: '8px' }}>
+        <h2 style={{ color: '#198754' }}> Nộp bài thành công!</h2>
+        <p>Bạn đã hoàn thành <strong>{Object.keys(answers).length} / {mockQuestions.length}</strong> câu hỏi.</p>
+        <p style={{ color: '#666' }}>Kết quả chi tiết sẽ được cập nhật sau khi kết nối máy chủ.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', padding: '20px', gap: '20px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -139,7 +167,10 @@ const ExamRoom = () => {
           })}
         </div>
         
-        <button style={{ marginTop: '30px', width: '100%', padding: '12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}>
+        <button
+          onClick={() => handleSubmit(false)} 
+          style={{ marginTop: '30px', width: '100%', padding: '12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}
+        >
           NỘP BÀI
         </button>
       </div>
