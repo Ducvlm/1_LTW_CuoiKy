@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-// 1. Dữ liệu giả lập để làm giao diện trước khi có API
+//  Dữ liệu giả lập để làm giao diện trước khi có API
 const mockQuestions = [
   { id: 1, text: "React được phát triển bởi công ty nào?", options: ["Google", "Facebook", "Microsoft", "Apple"] },
   { id: 2, text: "Hook nào dùng để quản lý state cơ bản nhất?", options: ["useEffect", "useContext", "useState", "useReducer"] },
