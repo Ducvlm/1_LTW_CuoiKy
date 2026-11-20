@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
 const AdminDashboard = () => {
-  const [activeMenu, setActiveMenu] = useState('overview'); // 'overview' | 'users' | 'subjects'
+  const [activeMenu, setActiveMenu] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [chartRange, setChartRange] = useState('7d'); // '7d' | '30d'
+  const [chartRange, setChartRange] = useState('7d');
   const [globalSearch, setGlobalSearch] = useState('');
 
   const [users, setUsers] = useState([]);
@@ -12,15 +12,12 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Bộ lọc trong tab Quản lý tài khoản
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Form thêm User mới
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'teacher' });
 
-  // Form thêm / sửa Môn học
   const [subjectForm, setSubjectForm] = useState({ subjectCode: '', name: '' });
   const [editingSubjectId, setEditingSubjectId] = useState(null);
 
@@ -66,7 +63,6 @@ const AdminDashboard = () => {
     fetchData();
   }, []);
 
-  // --- THỐNG KÊ TỪ DATABASE ---
   const stats = useMemo(() => {
     const totalUsers = users.length;
     const students = users.filter(u => u.role === 'student').length;
@@ -77,7 +73,6 @@ const AdminDashboard = () => {
     return { totalUsers, students, teachers, admins, locked, active, totalSubjects: subjects.length };
   }, [users, subjects]);
 
-  // Dữ liệu biểu đồ 7 ngày / 30 ngày dựa trên createdAt của users
   const chartData = useMemo(() => {
     const days = chartRange === '7d' ? 7 : 10;
     const dayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -93,8 +88,7 @@ const AdminDashboard = () => {
 
       const count = users.filter(u => {
         if (!u.createdAt) return false;
-        const created = new Date(u.createdAt);
-        return created.toDateString() === d.toDateString();
+        return new Date(u.createdAt).toDateString() === d.toDateString();
       }).length;
 
       result.push({ label, value: count });
@@ -102,7 +96,6 @@ const AdminDashboard = () => {
     return result;
   }, [users, chartRange]);
 
-  // Lọc danh sách users theo tìm kiếm + role + trạng thái
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
       const matchSearch =
@@ -117,7 +110,6 @@ const AdminDashboard = () => {
     });
   }, [users, globalSearch, roleFilter, statusFilter]);
 
-  // Lọc danh sách môn học theo tìm kiếm
   const filteredSubjects = useMemo(() => {
     return subjects.filter(s =>
       s.subjectCode?.toLowerCase().includes(globalSearch.toLowerCase()) ||
@@ -125,7 +117,6 @@ const AdminDashboard = () => {
     );
   }, [subjects, globalSearch]);
 
-  // --- CÁC HÀM XỬ LÝ CRUD ---
   const handleCreateUser = async (e) => {
     e.preventDefault();
     try {
@@ -231,7 +222,6 @@ const AdminDashboard = () => {
     navigate('/login');
   };
 
-  // --- VẼ BIỂU ĐỒ ĐƯỜNG CONG SVG ---
   const renderAreaChart = () => {
     const width = 620;
     const height = 210;
@@ -245,7 +235,6 @@ const AdminDashboard = () => {
       return { x, y, ...d };
     });
 
-    // Tạo đường cong mượt (Cubic Bezier)
     let pathD = `M ${points[0].x} ${points[0].y}`;
     for (let i = 0; i < points.length - 1; i++) {
       const curr = points[i];
@@ -257,7 +246,7 @@ const AdminDashboard = () => {
     const areaD = `${pathD} L ${points[points.length - 1].x} ${height - padY} L ${points[0].x} ${height - padY} Z`;
 
     return (
-      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: '220px', overflow: 'visible' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-56 overflow-visible">
         <defs>
           <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#2563eb" stopOpacity="0.22" />
@@ -265,7 +254,6 @@ const AdminDashboard = () => {
           </linearGradient>
         </defs>
 
-        {/* Đường lưới ngang */}
         {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
           const y = height - padY - ratio * (height - padY * 2);
           const val = Math.round(ratio * maxVal);
@@ -277,13 +265,9 @@ const AdminDashboard = () => {
           );
         })}
 
-        {/* Vùng tô dưới đường */}
         <path d={areaD} fill="url(#areaGrad)" />
-
-        {/* Đường biểu đồ chính */}
         <path d={pathD} fill="none" stroke="#2563eb" strokeWidth="2.5" />
 
-        {/* Các điểm dữ liệu & nhãn trục X */}
         {points.map((p, idx) => (
           <g key={idx}>
             <circle cx={p.x} cy={p.y} r="4" fill="#2563eb" stroke="#fff" strokeWidth="2" />
@@ -294,7 +278,6 @@ const AdminDashboard = () => {
     );
   };
 
-  // --- VẼ BIỂU ĐỒ TRÒN DONUT SVG ---
   const renderDonutChart = () => {
     const total = Math.max(stats.totalUsers, 1);
     const segments = [
@@ -309,9 +292,9 @@ const AdminDashboard = () => {
     let cumulativePercent = 0;
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-        <div style={{ position: 'relative', width: '156px', height: '156px' }}>
-          <svg viewBox="0 0 156 156" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
+      <div className="flex flex-col items-center justify-center h-full">
+        <div className="relative w-40 h-40">
+          <svg viewBox="0 0 156 156" className="-rotate-90 w-full h-full">
             <circle cx="78" cy="78" r={radius} fill="transparent" stroke="#f1f5f9" strokeWidth="20" />
             {segments.map((seg, idx) => {
               const percent = seg.value / total;
@@ -334,28 +317,20 @@ const AdminDashboard = () => {
               );
             })}
           </svg>
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <span style={{ fontSize: '22px', fontWeight: '700', color: '#0f172a' }}>{stats.totalUsers}</span>
-            <span style={{ fontSize: '11px', color: '#64748b' }}>Tài khoản</span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-2xl font-bold text-slate-900">{stats.totalUsers}</span>
+            <span className="text-[11px] text-slate-500">Tài khoản</span>
           </div>
         </div>
 
-        {/* Chú thích */}
-        <div style={{ width: '100%', marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
+        <div className="w-full mt-4 grid grid-cols-2 gap-2 text-xs">
           {segments.map((seg, idx) => (
-            <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: seg.color }}></span>
+            <div key={idx} className="flex items-center justify-between px-2.5 py-1.5 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="flex items-center gap-1.5 text-slate-600">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: seg.color }}></span>
                 <span>{seg.label}</span>
               </div>
-              <strong style={{ color: '#0f172a' }}>{seg.value}</strong>
+              <strong className="text-slate-900">{seg.value}</strong>
             </div>
           ))}
         </div>
@@ -365,39 +340,30 @@ const AdminDashboard = () => {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f6f9', color: '#475569' }}>
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 text-slate-600 text-sm font-medium">
         Đang đồng bộ dữ liệu hệ thống...
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f4f6f9', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", color: '#0f172a' }}>
+    <div className="flex min-h-screen bg-[#f4f6f9] font-sans text-slate-900 antialiased">
       {/* SIDEBAR TRÁI */}
       {sidebarOpen && (
-        <aside style={{
-          width: '240px',
-          backgroundColor: '#ffffff',
-          borderRight: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '20px 14px',
-          flexShrink: 0
-        }}>
+        <aside className="w-60 bg-white border-r border-slate-200 flex flex-col justify-between p-4 shrink-0">
           <div>
-            <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 10px 24px', textDecoration: 'none', color: '#0f172a' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: '#2563eb', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700' }}>
+            <Link to="/" className="flex items-center gap-2.5 px-2 pb-6 pt-1">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">
                 Q
               </div>
-              <span style={{ fontWeight: '700', fontSize: '17px' }}>QuizMaster</span>
+              <span className="font-bold text-lg tracking-tight">QuizMaster</span>
             </Link>
 
-            <div style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', padding: '0 12px 8px', letterSpacing: '0.05em' }}>
+            <div className="text-[11px] font-semibold text-slate-400 uppercase px-3 pb-2 tracking-wider">
               Quản trị viên
             </div>
 
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <nav className="flex flex-col gap-1">
               {[
                 { id: 'overview', label: 'Tổng quan Dashboard', icon: '📊' },
                 { id: 'users', label: 'Quản lý Tài khoản', icon: '👥', badge: stats.totalUsers },
@@ -406,33 +372,22 @@ const AdminDashboard = () => {
                 <button
                   key={item.id}
                   onClick={() => setActiveMenu(item.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    backgroundColor: activeMenu === item.id ? '#eff6ff' : 'transparent',
-                    color: activeMenu === item.id ? '#2563eb' : '#475569',
-                    fontWeight: activeMenu === item.id ? '600' : '500',
-                    fontSize: '13.5px',
-                    cursor: 'pointer',
-                    textAlign: 'left'
-                  }}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition cursor-pointer ${
+                    activeMenu === item.id
+                      ? 'bg-blue-50 text-blue-600 font-semibold'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'
+                  }`}
                 >
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span className="flex items-center gap-2.5">
                     <span>{item.icon}</span>
                     <span>{item.label}</span>
                   </span>
                   {item.badge !== undefined && (
-                    <span style={{
-                      fontSize: '11px',
-                      padding: '2px 7px',
-                      borderRadius: '999px',
-                      backgroundColor: activeMenu === item.id ? '#dbeafe' : '#f1f5f9',
-                      color: activeMenu === item.id ? '#1d4ed8' : '#64748b'
-                    }}>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full ${
+                        activeMenu === item.id ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
                       {item.badge}
                     </span>
                   )}
@@ -441,11 +396,17 @@ const AdminDashboard = () => {
             </nav>
           </div>
 
-          <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <Link to="/" style={{ padding: '8px 12px', fontSize: '13px', color: '#475569', textDecoration: 'none', borderRadius: '8px', backgroundColor: '#f8fafc' }}>
+          <div className="border-t border-slate-100 pt-3 flex flex-col gap-2">
+            <Link
+              to="/"
+              className="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-lg transition"
+            >
               ← Về trang chủ web
             </Link>
-            <button onClick={handleLogout} style={{ padding: '8px 12px', fontSize: '13px', color: '#ef4444', backgroundColor: '#fef2f2', border: 'none', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', fontWeight: '500' }}>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-2 text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg text-left transition cursor-pointer"
+            >
               Đăng xuất tài khoản
             </button>
           </div>
@@ -453,124 +414,100 @@ const AdminDashboard = () => {
       )}
 
       {/* KHU VỰC NỘI DUNG CHÍNH */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        {/* TOP HEADER BAR (Giống ảnh mẫu) */}
-        <header style={{
-          height: '68px',
-          backgroundColor: '#f4f6f9',
-          padding: '0 28px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderBottom: '1px solid #e2e8f0'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* TOP HEADER BAR */}
+        <header className="h-16 bg-[#f4f6f9] px-6 border-b border-slate-200 flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              style={{ border: 'none', background: 'transparent', fontSize: '18px', cursor: 'pointer', color: '#475569', padding: '4px' }}
+              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200/70 transition cursor-pointer"
               title="Ẩn/hiện menu"
             >
               ☰
             </button>
             <div>
-              <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
+              <h1 className="text-lg font-bold text-slate-900 leading-tight">
                 {activeMenu === 'overview' ? 'Dashboard' : activeMenu === 'users' ? 'Quản lý Tài khoản' : 'Quản lý Môn học'}
               </h1>
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+              <div className="text-xs text-slate-400">
                 QuizMaster &gt; {activeMenu === 'overview' ? 'Dashboard' : activeMenu === 'users' ? 'Tài khoản' : 'Môn học'}
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Ô tìm kiếm nhanh */}
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                placeholder="🔍 Tìm kiếm nhanh..."
-                value={globalSearch}
-                onChange={(e) => {
-                  setGlobalSearch(e.target.value);
-                  if (activeMenu === 'overview' && e.target.value.trim() !== '') {
-                    setActiveMenu('users');
-                  }
-                }}
-                style={{
-                  width: '230px',
-                  padding: '8px 14px',
-                  borderRadius: '8px',
-                  border: '1px solid #e2e8f0',
-                  backgroundColor: '#ffffff',
-                  fontSize: '13px',
-                  outline: 'none'
-                }}
-              />
-            </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              placeholder="🔍 Tìm kiếm nhanh..."
+              value={globalSearch}
+              onChange={(e) => {
+                setGlobalSearch(e.target.value);
+                if (activeMenu === 'overview' && e.target.value.trim() !== '') {
+                  setActiveMenu('users');
+                }
+              }}
+              className="w-56 px-3.5 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition"
+            />
 
-            {/* Nút làm mới */}
             <button
               onClick={() => fetchData(true)}
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                backgroundColor: '#ffffff',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '15px'
-              }}
+              className="w-9 h-9 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg flex items-center justify-center text-sm transition cursor-pointer"
               title="Làm mới dữ liệu"
             >
               {refreshing ? '⏳' : '🔄'}
             </button>
 
-            {/* Badge Admin */}
-            <div style={{ padding: '6px 12px', backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>
+            <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700">
               👤 {currentUser.username || 'Admin'}
             </div>
           </div>
         </header>
 
         {/* NỘI DUNG TỪNG MỤC */}
-        <main style={{ padding: '24px 28px', maxWidth: '1360px', width: '100%', margin: '0 auto' }}>
-          {/* HÀNG 1: 4 THẺ KPI VỚI VIỀN MÀU TRÊN CÙNG */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px', marginBottom: '22px' }}>
-            <div style={{ ...kpiCardStyle, borderTop: '3px solid #10b981' }}>
-              <div style={{ ...kpiIconBox, backgroundColor: '#ecfdf5', color: '#10b981' }}>👥</div>
+        <main className="p-6 max-w-7xl w-full mx-auto space-y-6">
+          {/* HÀNG 1: 4 THẺ KPI */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-5 border border-slate-200 border-t-[3px] border-t-emerald-500 shadow-sm flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+                👥
+              </div>
               <div>
-                <div style={{ fontSize: '12.5px', color: '#64748b' }}>Tổng tài khoản</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', margin: '2px 0' }}>{stats.totalUsers}</div>
-                <div style={{ fontSize: '11.5px', color: '#10b981' }}>● {stats.active} đang hoạt động</div>
+                <div className="text-xs text-slate-500 font-medium">Tổng tài khoản</div>
+                <div className="text-2xl font-bold text-slate-900 my-0.5">{stats.totalUsers}</div>
+                <div className="text-[11px] text-emerald-600 font-medium">● {stats.active} đang hoạt động</div>
               </div>
             </div>
 
-            <div style={{ ...kpiCardStyle, borderTop: '3px solid #2563eb' }}>
-              <div style={{ ...kpiIconBox, backgroundColor: '#eff6ff', color: '#2563eb' }}>🎓</div>
+            <div className="bg-white rounded-xl p-5 border border-slate-200 border-t-[3px] border-t-blue-600 shadow-sm flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+                🎓
+              </div>
               <div>
-                <div style={{ fontSize: '12.5px', color: '#64748b' }}>Thí sinh đăng ký</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', margin: '2px 0' }}>{stats.students}</div>
-                <div style={{ fontSize: '11.5px', color: '#64748b' }}>Sẵn sàng tham gia thi</div>
+                <div className="text-xs text-slate-500 font-medium">Thí sinh đăng ký</div>
+                <div className="text-2xl font-bold text-slate-900 my-0.5">{stats.students}</div>
+                <div className="text-[11px] text-slate-400">Sẵn sàng tham gia thi</div>
               </div>
             </div>
 
-            <div style={{ ...kpiCardStyle, borderTop: '3px solid #f59e0b' }}>
-              <div style={{ ...kpiIconBox, backgroundColor: '#fffbeb', color: '#f59e0b' }}>📚</div>
+            <div className="bg-white rounded-xl p-5 border border-slate-200 border-t-[3px] border-t-amber-500 shadow-sm flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
+                📚
+              </div>
               <div>
-                <div style={{ fontSize: '12.5px', color: '#64748b' }}>Môn học hệ thống</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', margin: '2px 0' }}>{stats.totalSubjects}</div>
-                <div style={{ fontSize: '11.5px', color: '#64748b' }}>Đang mở ngân hàng đề</div>
+                <div className="text-xs text-slate-500 font-medium">Môn học hệ thống</div>
+                <div className="text-2xl font-bold text-slate-900 my-0.5">{stats.totalSubjects}</div>
+                <div className="text-[11px] text-slate-400">Đang mở ngân hàng đề</div>
               </div>
             </div>
 
-            <div style={{ ...kpiCardStyle, borderTop: '3px solid #8b5cf6' }}>
-              <div style={{ ...kpiIconBox, backgroundColor: '#f5f3ff', color: '#8b5cf6' }}>🧑‍🏫</div>
+            <div className="bg-white rounded-xl p-5 border border-slate-200 border-t-[3px] border-t-violet-500 shadow-sm flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center text-xl shrink-0">
+                🧑‍🏫
+              </div>
               <div>
-                <div style={{ fontSize: '12.5px', color: '#64748b' }}>Giảng viên & Quản trị</div>
-                <div style={{ fontSize: '24px', fontWeight: '700', margin: '2px 0' }}>{stats.teachers + stats.admins}</div>
-                <div style={{ fontSize: '11.5px', color: '#64748b' }}>{stats.teachers} GV · {stats.admins} Admin</div>
+                <div className="text-xs text-slate-500 font-medium">Giảng viên & Quản trị</div>
+                <div className="text-2xl font-bold text-slate-900 my-0.5">{stats.teachers + stats.admins}</div>
+                <div className="text-[11px] text-slate-400">{stats.teachers} GV · {stats.admins} Admin</div>
               </div>
             </div>
           </div>
@@ -578,41 +515,26 @@ const AdminDashboard = () => {
           {/* VIEW 1: TỔNG QUAN DASHBOARD */}
           {activeMenu === 'overview' && (
             <>
-              {/* HÀNG 2: BIỂU ĐỒ ĐƯỜNG & BIỂU ĐỒ TRÒN DONUT */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '18px', marginBottom: '22px' }}>
-                <div style={panelCardStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                    <div style={{ fontWeight: '600', fontSize: '14.5px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <div className="lg:col-span-2 bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="font-semibold text-sm text-slate-800 flex items-center gap-2">
                       <span>📈</span> Thống kê tài khoản đăng ký mới
                     </div>
-                    <div style={{ display: 'flex', gap: '4px', backgroundColor: '#f1f5f9', padding: '3px', borderRadius: '6px' }}>
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
                       <button
                         onClick={() => setChartRange('7d')}
-                        style={{
-                          padding: '4px 10px',
-                          fontSize: '12px',
-                          borderRadius: '5px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          backgroundColor: chartRange === '7d' ? '#2563eb' : 'transparent',
-                          color: chartRange === '7d' ? '#fff' : '#64748b',
-                          fontWeight: '500'
-                        }}
+                        className={`px-2.5 py-1 text-xs rounded-md font-medium transition cursor-pointer ${
+                          chartRange === '7d' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                        }`}
                       >
                         7 ngày
                       </button>
                       <button
                         onClick={() => setChartRange('30d')}
-                        style={{
-                          padding: '4px 10px',
-                          fontSize: '12px',
-                          borderRadius: '5px',
-                          border: 'none',
-                          cursor: 'pointer',
-                          backgroundColor: chartRange === '30d' ? '#2563eb' : 'transparent',
-                          color: chartRange === '30d' ? '#fff' : '#64748b',
-                          fontWeight: '500'
-                        }}
+                        className={`px-2.5 py-1 text-xs rounded-md font-medium transition cursor-pointer ${
+                          chartRange === '30d' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                        }`}
                       >
                         30 ngày
                       </button>
@@ -621,97 +543,102 @@ const AdminDashboard = () => {
                   {renderAreaChart()}
                 </div>
 
-                <div style={panelCardStyle}>
-                  <div style={{ fontWeight: '600', fontSize: '14.5px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+                  <div className="font-semibold text-sm text-slate-800 mb-3 flex items-center gap-2">
                     <span>🍩</span> Cơ cấu người dùng
                   </div>
                   {renderDonutChart()}
                 </div>
               </div>
 
-              {/* HÀNG 3: TÀI KHOẢN GẦN ĐÂY & DANH MỤC MÔN HỌC */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '18px' }}>
-                <div style={panelCardStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                    <span style={{ fontWeight: '600', fontSize: '14.5px' }}>🕒 Tài khoản tham gia gần đây</span>
-                    <button onClick={() => setActiveMenu('users')} style={{ border: 'none', background: 'none', color: '#2563eb', fontSize: '12.5px', fontWeight: '600', cursor: 'pointer' }}>
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                <div className="lg:col-span-3 bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-3.5">
+                    <span className="font-semibold text-sm text-slate-800">🕒 Tài khoản tham gia gần đây</span>
+                    <button
+                      onClick={() => setActiveMenu('users')}
+                      className="text-blue-600 hover:text-blue-700 text-xs font-semibold cursor-pointer"
+                    >
                       Xem tất cả →
                     </button>
                   </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #f1f5f9', color: '#94a3b8', fontSize: '11.5px', textTransform: 'uppercase', textAlign: 'left' }}>
-                        <th style={{ padding: '10px 8px' }}>Họ tên</th>
-                        <th style={{ padding: '10px 8px' }}>Email</th>
-                        <th style={{ padding: '10px 8px' }}>Vai trò</th>
-                        <th style={{ padding: '10px 8px' }}>Trạng thái</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.slice(0, 5).map(u => (
-                        <tr key={u._id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                          <td style={{ padding: '11px 8px', fontWeight: '600', color: '#2563eb' }}>{u.username}</td>
-                          <td style={{ padding: '11px 8px', color: '#475569' }}>{u.email}</td>
-                          <td style={{ padding: '11px 8px' }}>
-                            <span style={{
-                              padding: '3px 9px',
-                              borderRadius: '999px',
-                              fontSize: '11.5px',
-                              fontWeight: '500',
-                              backgroundColor: u.role === 'admin' ? '#f3e8ff' : u.role === 'teacher' ? '#dbeafe' : '#f1f5f9',
-                              color: u.role === 'admin' ? '#7e22ce' : u.role === 'teacher' ? '#1d4ed8' : '#475569'
-                            }}>
-                              {u.role === 'admin' ? 'Admin' : u.role === 'teacher' ? 'Giảng viên' : 'Thí sinh'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '11px 8px' }}>
-                            <span style={{
-                              padding: '3px 9px',
-                              borderRadius: '999px',
-                              fontSize: '11.5px',
-                              fontWeight: '500',
-                              backgroundColor: u.isActive !== false ? '#dcfce7' : '#fee2e2',
-                              color: u.isActive !== false ? '#15803d' : '#b91c1c'
-                            }}>
-                              {u.isActive !== false ? 'Hoạt động' : 'Đã khóa'}
-                            </span>
-                          </td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-slate-400 text-[11px] uppercase">
+                          <th className="py-2.5 px-2">Họ tên</th>
+                          <th className="py-2.5 px-2">Email</th>
+                          <th className="py-2.5 px-2">Vai trò</th>
+                          <th className="py-2.5 px-2">Trạng thái</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {users.slice(0, 5).map(u => (
+                          <tr key={u._id} className="hover:bg-slate-50/80 transition">
+                            <td className="py-3 px-2 font-semibold text-blue-600">{u.username}</td>
+                            <td className="py-3 px-2 text-slate-600">{u.email}</td>
+                            <td className="py-3 px-2">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  u.role === 'admin'
+                                    ? 'bg-purple-100 text-purple-700'
+                                    : u.role === 'teacher'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {u.role === 'admin' ? 'Admin' : u.role === 'teacher' ? 'Giảng viên' : 'Thí sinh'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-2">
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  u.isActive !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                                }`}
+                              >
+                                {u.isActive !== false ? 'Hoạt động' : 'Đã khóa'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
-                <div style={panelCardStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                    <span style={{ fontWeight: '600', fontSize: '14.5px' }}>🔥 Danh sách môn học</span>
-                    <button onClick={() => setActiveMenu('subjects')} style={{ border: 'none', background: 'none', color: '#2563eb', fontSize: '12.5px', fontWeight: '600', cursor: 'pointer' }}>
+                <div className="lg:col-span-2 bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-3.5">
+                    <span className="font-semibold text-sm text-slate-800">🔥 Danh sách môn học</span>
+                    <button
+                      onClick={() => setActiveMenu('subjects')}
+                      className="text-blue-600 hover:text-blue-700 text-xs font-semibold cursor-pointer"
+                    >
                       Quản lý →
                     </button>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div className="space-y-3.5">
                     {subjects.slice(0, 5).map((sub, index) => {
                       const barWidth = Math.max(35, 95 - index * 14);
                       return (
-                        <div key={sub._id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                            <span style={{ fontWeight: '700', fontSize: '12px', color: index === 0 ? '#f59e0b' : '#94a3b8', width: '16px' }}>
+                        <div key={sub._id} className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className={`font-bold text-xs w-4 ${index === 0 ? 'text-amber-500' : 'text-slate-400'}`}>
                               {index + 1}
                             </span>
-                            <div style={{ overflow: 'hidden' }}>
-                              <div style={{ fontSize: '13px', fontWeight: '600', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {sub.name}
-                              </div>
-                              <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>Mã môn: {sub.subjectCode}</div>
+                            <div className="truncate">
+                              <div className="text-xs font-semibold text-slate-800 truncate">{sub.name}</div>
+                              <div className="text-[11px] text-slate-400">Mã môn: {sub.subjectCode}</div>
                             </div>
                           </div>
-                          <div style={{ width: '80px', height: '6px', backgroundColor: '#f1f5f9', borderRadius: '999px', flexShrink: 0 }}>
-                            <div style={{ width: `${barWidth}%`, height: '100%', backgroundColor: '#2563eb', borderRadius: '999px' }}></div>
+                          <div className="w-20 h-1.5 bg-slate-100 rounded-full shrink-0 overflow-hidden">
+                            <div className="h-full bg-blue-600 rounded-full" style={{ width: `${barWidth}%` }}></div>
                           </div>
                         </div>
                       );
                     })}
-                    {subjects.length === 0 && <div style={{ fontSize: '13px', color: '#94a3b8' }}>Chưa có môn học nào trong hệ thống.</div>}
+                    {subjects.length === 0 && (
+                      <div className="text-xs text-slate-400">Chưa có môn học nào trong hệ thống.</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -720,16 +647,24 @@ const AdminDashboard = () => {
 
           {/* VIEW 2: QUẢN LÝ TÀI KHOẢN CHI TIẾT */}
           {activeMenu === 'users' && (
-            <div style={panelCardStyle}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '18px' }}>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} style={controlInputStyle}>
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="flex flex-wrap gap-2.5">
+                  <select
+                    value={roleFilter}
+                    onChange={e => setRoleFilter(e.target.value)}
+                    className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-500"
+                  >
                     <option value="all">Tất cả vai trò</option>
                     <option value="student">Thí sinh</option>
                     <option value="teacher">Giảng viên</option>
                     <option value="admin">Admin</option>
                   </select>
-                  <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={controlInputStyle}>
+                  <select
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value)}
+                    className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-500"
+                  >
                     <option value="all">Tất cả trạng thái</option>
                     <option value="active">Đang hoạt động</option>
                     <option value="locked">Đã khóa</option>
@@ -738,87 +673,109 @@ const AdminDashboard = () => {
 
                 <button
                   onClick={() => setShowAddUser(!showAddUser)}
-                  style={{ padding: '9px 16px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition cursor-pointer"
                 >
                   {showAddUser ? '✕ Đóng biểu mẫu' : '+ Cấp tài khoản mới'}
                 </button>
               </div>
 
               {showAddUser && (
-                <form onSubmit={handleCreateUser} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '10px', marginBottom: '18px', border: '1px solid #e2e8f0' }}>
-                  <input type="text" placeholder="Họ và tên" value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} required style={controlInputStyle} />
-                  <input type="email" placeholder="Email đăng nhập" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} required style={controlInputStyle} />
-                  <input type="password" placeholder="Mật khẩu" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} required style={controlInputStyle} />
-                  <select value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })} style={controlInputStyle}>
+                <form
+                  onSubmit={handleCreateUser}
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 p-4 bg-slate-50 rounded-xl border border-slate-200 mb-5"
+                >
+                  <input
+                    type="text"
+                    placeholder="Họ và tên"
+                    value={newUser.username}
+                    onChange={e => setNewUser({ ...newUser, username: e.target.value })}
+                    required
+                    className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-500"
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email đăng nhập"
+                    value={newUser.email}
+                    onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                    required
+                    className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-500"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Mật khẩu"
+                    value={newUser.password}
+                    onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                    required
+                    className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-500"
+                  />
+                  <select
+                    value={newUser.role}
+                    onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                    className="px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-500"
+                  >
                     <option value="teacher">Giảng viên</option>
                     <option value="student">Thí sinh</option>
                     <option value="admin">Admin</option>
                   </select>
-                  <button type="submit" style={{ padding: '9px 16px', backgroundColor: '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm transition cursor-pointer"
+                  >
                     Lưu tài khoản
                   </button>
                 </form>
               )}
 
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
                   <thead>
-                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b', fontSize: '12px' }}>
-                      <th style={{ padding: '12px' }}>Họ và tên</th>
-                      <th style={{ padding: '12px' }}>Email</th>
-                      <th style={{ padding: '12px' }}>Phân quyền</th>
-                      <th style={{ padding: '12px' }}>Trạng thái</th>
-                      <th style={{ padding: '12px', textAlign: 'right' }}>Thao tác</th>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs">
+                      <th className="py-3 px-3 font-semibold">Họ và tên</th>
+                      <th className="py-3 px-3 font-semibold">Email</th>
+                      <th className="py-3 px-3 font-semibold">Phân quyền</th>
+                      <th className="py-3 px-3 font-semibold">Trạng thái</th>
+                      <th className="py-3 px-3 font-semibold text-right">Thao tác</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {filteredUsers.map(u => (
-                      <tr key={u._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '12px', fontWeight: '600' }}>{u.username}</td>
-                        <td style={{ padding: '12px', color: '#475569' }}>{u.email}</td>
-                        <td style={{ padding: '12px' }}>
+                      <tr key={u._id} className="hover:bg-slate-50/70 transition">
+                        <td className="py-3 px-3 font-semibold text-slate-800">{u.username}</td>
+                        <td className="py-3 px-3 text-slate-600">{u.email}</td>
+                        <td className="py-3 px-3">
                           <select
                             value={u.role}
                             onChange={(e) => handleRoleChange(u, e.target.value)}
-                            style={{ padding: '5px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', backgroundColor: '#fff' }}
+                            className="px-2.5 py-1 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-500"
                           >
                             <option value="student">Thí sinh</option>
                             <option value="teacher">Giảng viên</option>
                             <option value="admin">Admin</option>
                           </select>
                         </td>
-                        <td style={{ padding: '12px' }}>
-                          <span style={{
-                            padding: '4px 10px',
-                            borderRadius: '999px',
-                            fontSize: '12px',
-                            fontWeight: '500',
-                            backgroundColor: u.isActive !== false ? '#dcfce7' : '#fee2e2',
-                            color: u.isActive !== false ? '#15803d' : '#b91c1c'
-                          }}>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                              u.isActive !== false ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                            }`}
+                          >
                             {u.isActive !== false ? 'Hoạt động' : 'Đã khóa'}
                           </span>
                         </td>
-                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                        <td className="py-3 px-3 text-right space-x-2">
                           <button
                             onClick={() => handleToggleStatus(u._id)}
-                            style={{
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              border: 'none',
-                              fontSize: '12px',
-                              fontWeight: '500',
-                              cursor: 'pointer',
-                              marginRight: '8px',
-                              backgroundColor: u.isActive !== false ? '#fef3c7' : '#d1fae5',
-                              color: u.isActive !== false ? '#b45309' : '#047857'
-                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                              u.isActive !== false
+                                ? 'bg-amber-100 hover:bg-amber-200 text-amber-800'
+                                : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
+                            }`}
                           >
                             {u.isActive !== false ? 'Khóa' : 'Mở khóa'}
                           </button>
                           <button
                             onClick={() => handleDeleteUser(u._id)}
-                            style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: '#fee2e2', color: '#b91c1c' }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-100 hover:bg-rose-200 text-rose-700 transition cursor-pointer"
                           >
                             Xóa
                           </button>
@@ -833,15 +790,18 @@ const AdminDashboard = () => {
 
           {/* VIEW 3: QUẢN LÝ MÔN HỌC CHI TIẾT */}
           {activeMenu === 'subjects' && (
-            <div style={panelCardStyle}>
-              <form onSubmit={handleSubjectSubmit} style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm">
+              <form
+                onSubmit={handleSubjectSubmit}
+                className="flex flex-wrap gap-2.5 p-4 bg-slate-50 rounded-xl border border-slate-200 mb-5"
+              >
                 <input
                   type="text"
                   placeholder="Mã môn (VD: INT1434)"
                   value={subjectForm.subjectCode}
                   onChange={e => setSubjectForm({ ...subjectForm, subjectCode: e.target.value })}
                   required
-                  style={{ ...controlInputStyle, maxWidth: '200px' }}
+                  className="w-full sm:w-48 px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-500"
                 />
                 <input
                   type="text"
@@ -849,105 +809,68 @@ const AdminDashboard = () => {
                   value={subjectForm.name}
                   onChange={e => setSubjectForm({ ...subjectForm, name: e.target.value })}
                   required
-                  style={{ ...controlInputStyle, flex: 1, minWidth: '220px' }}
+                  className="flex-1 min-w-[220px] px-3 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:outline-none focus:border-blue-500"
                 />
-                <button type="submit" style={{ padding: '9px 18px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition cursor-pointer"
+                >
                   {editingSubjectId ? 'Lưu cập nhật' : '+ Thêm môn học'}
                 </button>
                 {editingSubjectId && (
                   <button
                     type="button"
                     onClick={() => { setEditingSubjectId(null); setSubjectForm({ subjectCode: '', name: '' }); }}
-                    style={{ padding: '9px 14px', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
+                    className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition cursor-pointer"
                   >
                     Hủy
                   </button>
                 )}
               </form>
 
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', textAlign: 'left', color: '#64748b', fontSize: '12px' }}>
-                    <th style={{ padding: '12px', width: '160px' }}>Mã môn</th>
-                    <th style={{ padding: '12px' }}>Tên môn học</th>
-                    <th style={{ padding: '12px', textAlign: 'right', width: '180px' }}>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSubjects.map(sub => (
-                    <tr key={sub._id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '12px' }}>
-                        <span style={{ padding: '4px 10px', backgroundColor: '#eff6ff', color: '#1d4ed8', borderRadius: '6px', fontWeight: '600', fontSize: '12.5px' }}>
-                          {sub.subjectCode}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px', fontWeight: '500' }}>{sub.name}</td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>
-                        <button
-                          onClick={() => { setEditingSubjectId(sub._id); setSubjectForm({ subjectCode: sub.subjectCode, name: sub.name }); }}
-                          style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: '500', cursor: 'pointer', marginRight: '8px', backgroundColor: '#eff6ff', color: '#2563eb' }}
-                        >
-                          Sửa
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSubject(sub._id)}
-                          style={{ padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '12px', fontWeight: '500', cursor: 'pointer', backgroundColor: '#fee2e2', color: '#b91c1c' }}
-                        >
-                          Xóa
-                        </button>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs">
+                      <th className="py-3 px-3 font-semibold w-40">Mã môn</th>
+                      <th className="py-3 px-3 font-semibold">Tên môn học</th>
+                      <th className="py-3 px-3 font-semibold text-right w-44">Thao tác</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredSubjects.map(sub => (
+                      <tr key={sub._id} className="hover:bg-slate-50/70 transition">
+                        <td className="py-3 px-3">
+                          <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md font-semibold text-xs">
+                            {sub.subjectCode}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-medium text-slate-800">{sub.name}</td>
+                        <td className="py-3 px-3 text-right space-x-2">
+                          <button
+                            onClick={() => { setEditingSubjectId(sub._id); setSubjectForm({ subjectCode: sub.subjectCode, name: sub.name }); }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-600 transition cursor-pointer"
+                          >
+                            Sửa
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSubject(sub._id)}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-100 hover:bg-rose-200 text-rose-700 transition cursor-pointer"
+                          >
+                            Xóa
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </main>
       </div>
     </div>
   );
-};
-
-// Styles dùng chung
-const kpiCardStyle = {
-  backgroundColor: '#ffffff',
-  borderRadius: '12px',
-  padding: '18px 20px',
-  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
-  borderLeft: '1px solid #e2e8f0',
-  borderRight: '1px solid #e2e8f0',
-  borderBottom: '1px solid #e2e8f0',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '16px'
-};
-
-const kpiIconBox = {
-  width: '44px',
-  height: '44px',
-  borderRadius: '10px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: '20px',
-  flexShrink: 0
-};
-
-const panelCardStyle = {
-  backgroundColor: '#ffffff',
-  borderRadius: '12px',
-  padding: '20px',
-  border: '1px solid #e2e8f0',
-  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
-};
-
-const controlInputStyle = {
-  padding: '8px 12px',
-  borderRadius: '8px',
-  border: '1px solid #cbd5e1',
-  fontSize: '13px',
-  backgroundColor: '#ffffff',
-  outline: 'none'
 };
 
 export default AdminDashboard;

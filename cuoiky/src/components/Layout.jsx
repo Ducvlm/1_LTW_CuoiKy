@@ -15,121 +15,76 @@ const Layout = () => {
     navigate('/login');
   };
 
-  // Trang Admin dùng khung giao diện Dashboard chuyên biệt
   if (isAdminPage) {
     return <Outlet />;
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc', color: '#0f172a', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif" }}>
-      {/* Thanh Navbar hiện đại */}
-      <header style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        backgroundColor: 'rgba(255, 255, 255, 0.92)',
-        backdropFilter: 'blur(8px)',
-        borderBottom: '1px solid #e2e8f0'
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          padding: '0 24px',
-          height: '64px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}>
-          {/* Logo */}
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', color: '#0f172a' }}>
-            <div style={{
-              width: '34px',
-              height: '34px',
-              borderRadius: '8px',
-              background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#fff',
-              fontWeight: '700',
-              fontSize: '16px'
-            }}>
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans antialiased">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-bold text-lg shadow-sm group-hover:shadow-blue-500/30 transition">
               Q
             </div>
-            <span style={{ fontWeight: '700', fontSize: '18px', letterSpacing: '-0.02em' }}>
-              Quiz<span style={{ color: '#2563eb' }}>Master</span>
+            <span className="font-bold text-xl tracking-tight text-slate-900">
+              Quiz<span className="text-blue-600">Master</span>
             </span>
           </Link>
 
-          {/* Menu điều hướng giữa */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '28px', fontSize: '14px', fontWeight: '500' }}>
-            <Link to="/" style={{ textDecoration: 'none', color: location.pathname === '/' ? '#2563eb' : '#475569' }}>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+            <Link
+              to="/"
+              className={`transition-colors ${
+                location.pathname === '/' ? 'text-blue-600 font-semibold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
               Trang chủ
             </Link>
             {user?.role === 'admin' && (
-              <Link to="/admin" style={{ textDecoration: 'none', color: '#2563eb', fontWeight: '600' }}>
+              <Link to="/admin" className="text-blue-600 font-semibold hover:text-blue-700 transition-colors">
                 Quản trị hệ thống
               </Link>
             )}
             {user?.role === 'teacher' && (
-              <Link to="/teacher" style={{ textDecoration: 'none', color: '#475569' }}>
+              <Link to="/teacher" className="text-slate-600 hover:text-slate-900 transition-colors">
                 Ngân hàng đề thi
               </Link>
             )}
             {user?.role === 'student' && (
-              <Link to="/exams" style={{ textDecoration: 'none', color: '#475569' }}>
+              <Link to="/exams" className="text-slate-600 hover:text-slate-900 transition-colors">
                 Phòng thi trực tuyến
               </Link>
             )}
           </nav>
 
-          {/* Khu vực tài khoản bên phải */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="flex items-center gap-3">
             {user ? (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 12px', backgroundColor: '#f1f5f9', borderRadius: '999px', fontSize: '13px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
-                  <span style={{ fontWeight: '600', color: '#1e293b' }}>{user.username}</span>
-                  <span style={{ color: '#64748b', fontSize: '12px' }}>({user.role})</span>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 border border-slate-200/60 rounded-full text-xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="font-semibold text-slate-800">{user.username}</span>
+                  <span className="text-slate-500 capitalize">({user.role})</span>
                 </div>
                 <button
                   onClick={handleLogout}
-                  style={{
-                    padding: '7px 14px',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    color: '#ef4444',
-                    backgroundColor: '#fef2f2',
-                    border: '1px solid #fecaca',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
-                  }}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition cursor-pointer"
                 >
                   Đăng xuất
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" style={{
-                  padding: '8px 16px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#334155',
-                  textDecoration: 'none',
-                  borderRadius: '8px'
-                }}>
+                <Link
+                  to="/login"
+                  className="px-4 py-2 text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+                >
                   Đăng nhập
                 </Link>
-                <Link to="/register" style={{
-                  padding: '8px 16px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  color: '#fff',
-                  backgroundColor: '#2563eb',
-                  textDecoration: 'none',
-                  borderRadius: '8px',
-                  boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)'
-                }}>
+                <Link
+                  to="/register"
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm shadow-blue-600/20 transition"
+                >
                   Đăng ký
                 </Link>
               </>
@@ -138,13 +93,11 @@ const Layout = () => {
         </div>
       </header>
 
-      {/* Nội dung chính */}
-      <main style={{ flex: 1 }}>
+      <main className="flex-1">
         <Outlet />
       </main>
 
-      {/* Footer tối giản */}
-      <footer style={{ borderTop: '1px solid #e2e8f0', backgroundColor: '#fff', padding: '20px 24px', textAlign: 'center', fontSize: '13px', color: '#64748b' }}>
+      <footer className="border-t border-slate-200 bg-white py-5 px-6 text-center text-xs text-slate-500">
         © 2026 QuizMaster — Hệ thống Thi Trắc Nghiệm Trực Tuyến
       </footer>
     </div>
