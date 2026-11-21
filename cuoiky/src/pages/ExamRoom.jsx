@@ -17,6 +17,15 @@ const ExamRoom = () => {
   return newArr;
 };
 
+const [flagged, setFlagged] = useState({});
+
+const toggleFlag = (questionId) => {
+  setFlagged((prev) => ({
+    ...prev,
+    [questionId]: !prev[questionId],
+  }));
+};
+
 const [questions, setQuestions] = useState(() => {
     const savedExam = localStorage.getItem('de_thi_da_tron');
     if (savedExam) return JSON.parse(savedExam);
@@ -31,7 +40,7 @@ const [questions, setQuestions] = useState(() => {
  
   const [timeLeft, setTimeLeft] = useState(() => {
     const savedTime = localStorage.getItem('thoi_gian_thi');
-    return savedTime ? Number(savedTime) : 20;
+    return savedTime ? Number(savedTime) : 3600;
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -128,7 +137,24 @@ const [tabSwitchCount, setTabSwitchCount] = useState(0);
       
       
       <div style={{ flex: 3, border: '1px solid #ddd', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
-        <h3>Câu {currentIndex + 1}: {currentQuestion.text}</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3>Câu {currentIndex + 1}: {currentQuestion.text}</h3>
+          <button
+            onClick={() => toggleFlag(currentQuestion.id)}
+            style={{
+              padding: '6px 12px',
+              cursor: 'pointer',
+              borderRadius: '6px',
+              border: '1px solid #ffc107',
+              background: flagged[currentQuestion.id] ? '#ffc107' : '#fff',
+              color: '#000',
+              fontWeight: 'bold',
+            }}
+          >
+            {flagged[currentQuestion.id] ? '🔖' : '🔖'}               
+          </button>
+        </div>
+
         
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
@@ -190,17 +216,18 @@ const [tabSwitchCount, setTabSwitchCount] = useState(0);
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
           {questions.map((q, index) => {
             const hasAnswered = answers[q.id]; 
-            const isCurrent = currentIndex === index; 
+            const isCurrent = currentIndex === index;
+            const isFlagged = flagged[q.id]; 
             
             return (
               <button 
                 key={q.id} 
                 onClick={() => setCurrentIndex(index)}
                 style={{ 
-                  width: '40px', height: '40px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '4px',
+                  width: '40px', height: '40px', fontWeight: 'bold', cursor: 'pointer', borderRadius: '6px',
                   border: isCurrent ? '2px solid #000' : '1px solid #ccc',
-                  background: hasAnswered ? '#198754' : '#fff', 
-                  color: hasAnswered ? '#fff' : '#000'
+                  background: isFlagged ? '#ffc107' : hasAnswered ? '#198754':'#fff', 
+                  color: isFlagged ? '#000' :  hasAnswered ? '#fff':'#000',
                 }}
               >
                 {index + 1}
