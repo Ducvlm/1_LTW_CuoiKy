@@ -8,10 +8,30 @@ const mockQuestions = [
 ];
 
 const ExamRoom = () => {
+  const shuffleArray = (array) => {
+  const newArr = [...array];
+  for (let i = newArr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+  }
+  return newArr;
+};
+
+const [questions, setQuestions] = useState(() => {
+    const savedExam = localStorage.getItem('de_thi_da_tron');
+    if (savedExam) return JSON.parse(savedExam);
+
+    const shuffled = shuffleArray(mockQuestions).map((q) => ({
+      ...q,
+      options: shuffleArray(q.options),
+    }));
+    localStorage.setItem('de_thi_da_tron', JSON.stringify(shuffled));
+    return shuffled;
+  });
  
   const [timeLeft, setTimeLeft] = useState(() => {
     const savedTime = localStorage.getItem('thoi_gian_thi');
-    return savedTime ? Number(savedTime) : 3600;
+    return savedTime ? Number(savedTime) : 20;
   });
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -32,6 +52,7 @@ const ExamRoom = () => {
   }, [timeLeft]);
   
 const [isSubmitted, setIsSubmitted] = useState(false);
+const [tabSwitchCount, setTabSwitchCount] = useState(0);
   
   useEffect(() => {
     if (isSubmitted) return;
@@ -45,11 +66,29 @@ const [isSubmitted, setIsSubmitted] = useState(false);
     return () => clearInterval(timerId);
   }, [timeLeft, isSubmitted]);
 
+  useEffect(() => {
+  const handleVisibilityChange = () => {
+    
+    if (document.hidden && !isSubmitted) {
+      setTabSwitchCount((prev) => {
+        const newCount = prev + 1;
+        alert(`⚠️ CẢNH BÁO: Bạn vừa rời khỏi trang thi! (Số lần vi phạm: ${newCount})`);
+        return newCount;
+      });
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  return () => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}, [isSubmitted]);
+
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
 
  
-  const currentQuestion = mockQuestions[currentIndex];
+  const currentQuestion = questions[currentIndex];
 
   
   const handleSelectAnswer = (option) => {
@@ -68,14 +107,17 @@ const [isSubmitted, setIsSubmitted] = useState(false);
     setIsSubmitted(true);
     localStorage.removeItem('nhap_bai_thi');
     localStorage.removeItem('thoi_gian_thi');
+    localStorage.removeItem('de_thi_da_tron');
     
   };
+
+
 
   if (isSubmitted) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', maxWidth: '600px', margin: '40px auto', border: '1px solid #ddd', borderRadius: '8px' }}>
         <h2 style={{ color: '#198754' }}> Nộp bài thành công!</h2>
-        <p>Bạn đã hoàn thành <strong>{Object.keys(answers).length} / {mockQuestions.length}</strong> câu hỏi.</p>
+        <p>Bạn đã hoàn thành <strong>{Object.keys(answers).length} / {questions.length}</strong> câu hỏi.</p>
         <p style={{ color: '#666' }}>Kết quả chi tiết sẽ được cập nhật sau khi kết nối máy chủ.</p>
       </div>
     );
@@ -127,7 +169,7 @@ const [isSubmitted, setIsSubmitted] = useState(false);
           </button>
           
           <button 
-            disabled={currentIndex === mockQuestions.length - 1} 
+            disabled={currentIndex === questions.length - 1} 
             onClick={() => setCurrentIndex(prev => prev + 1)}
             style={{ padding: '8px 16px', cursor: 'pointer' }}
           >
@@ -146,7 +188,7 @@ const [isSubmitted, setIsSubmitted] = useState(false);
         <h4 style={{ marginBottom: '15px' }}>Bảng điều hướng</h4>
         
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
-          {mockQuestions.map((q, index) => {
+          {questions.map((q, index) => {
             const hasAnswered = answers[q.id]; 
             const isCurrent = currentIndex === index; 
             
