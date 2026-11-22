@@ -7,7 +7,7 @@ const Register = () => {
     username: '',
     email: '',
     password: '',
-    role: 'student' 
+    role: 'student' // Mặc định là thí sinh
   });
 
   const [message, setMessage] = useState('');
