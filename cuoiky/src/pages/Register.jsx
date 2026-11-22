@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { User, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, UserPlus } from 'lucide-react';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -7,9 +9,11 @@ const Register = () => {
     password: '',
     role: 'student' 
   });
-  
+
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Lắng nghe thay đổi dữ liệu trên input
   const handleChange = (e) => {
@@ -32,6 +36,7 @@ const Register = () => {
       return; // Dừng lại, không gọi API
     }
 
+    setLoading(true);
     try {
       const response = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',
@@ -52,57 +57,138 @@ const Register = () => {
       setFormData({ username: '', email: '', password: '', role: 'student' });
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
+  const inputCls =
+    'w-full h-11 pl-10 pr-3.5 text-sm rounded-xl border border-slate-200 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition';
+
   return (
-    <div className="welcome-card" style={{ maxWidth: '400px', margin: '40px auto' }}>
-      <h2>Đăng ký tài khoản</h2>
-      <p style={{ margin: '15px 0', color: '#6b7280' }}>Tạo tài khoản mới để tham gia thi trắc nghiệm.</p>
+    <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-7 sm:p-8">
+          <div className="flex flex-col items-center text-center">
+            <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm shadow-indigo-600/20">
+              <UserPlus size={22} />
+            </div>
+            <h2 className="mt-4 text-xl font-semibold tracking-tight text-slate-900">Đăng ký tài khoản</h2>
+            <p className="mt-1 text-sm text-slate-500">Tạo tài khoản mới để tham gia thi trắc nghiệm</p>
+          </div>
 
-      {/* Hiển thị thông báo lỗi hoặc thành công */}
-      {error && <div style={{ color: 'red', marginBottom: '10px', fontSize: '14px' }}>{error}</div>}
-      {message && <div style={{ color: 'green', marginBottom: '10px', fontSize: '14px' }}>{message}</div>}
+          {error && (
+            <div
+              role="alert"
+              className="mt-6 flex items-start gap-2.5 p-3 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700 text-sm"
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px', textAlign: 'left' }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Họ và tên</label>
-          <input 
-            type="text" 
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            placeholder="Nhập họ tên của bạn" 
-            required
-            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }} 
-          />
+          {message && (
+            <div
+              role="status"
+              className="mt-6 flex items-start gap-2.5 p-3 rounded-lg bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-sm"
+            >
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+              <span>
+                {message}{' '}
+                <Link to="/login" className="font-semibold underline underline-offset-2">
+                  Đăng nhập
+                </Link>
+              </span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Họ và tên
+              </label>
+              <div className="relative">
+                <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="username"
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  placeholder="Nhập họ tên của bạn"
+                  autoComplete="name"
+                  required
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Email
+              </label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="name@example.com"
+                  autoComplete="email"
+                  required
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Mật khẩu
+              </label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Nhập mật khẩu"
+                  autoComplete="new-password"
+                  required
+                  className={`${inputCls} pr-11`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-11 inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed text-white font-medium text-sm rounded-xl shadow-sm shadow-indigo-600/20 transition cursor-pointer mt-2"
+            >
+              {loading && <Loader2 size={16} className="animate-spin" />}
+              {loading ? 'Đang tạo tài khoản...' : 'Đăng ký ngay'}
+            </button>
+          </form>
         </div>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Email</label>
-          <input 
-            type="email" 
-            name="email"
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="Nhập email" 
-            required
-            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }} 
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Mật khẩu</label>
-          <input 
-            type="password" 
-            name="password"
-            value={formData.password}
-            onChange={handleChange}
-            placeholder="Nhập mật khẩu" 
-            required
-            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #d1d5db' }} 
-          />
-        </div>
-        <button type="submit" className="btn-login" style={{ border: 'none', cursor: 'pointer', padding: '12px', marginTop: '10px' }}>Đăng ký ngay</button>
-      </form>
+
+        <p className="text-center text-sm text-slate-500 mt-6">
+          Đã có tài khoản?{' '}
+          <Link to="/login" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline">
+            Đăng nhập
+          </Link>
+        </p>
+      </div>
     </div>
   );
 };
