@@ -4,7 +4,11 @@ import React, { useState, useEffect } from 'react';
 const mockQuestions = [
   { id: 1, text: "React được phát triển bởi công ty nào?", options: ["Google", "Facebook", "Microsoft", "Apple"] },
   { id: 2, text: "Hook nào dùng để quản lý state cơ bản nhất?", options: ["useEffect", "useContext", "useState", "useReducer"] },
-  { id: 3, text: "Để chuyển trang trong React Router v6, ta dùng hook nào?", options: ["useHistory", "useNavigate", "useRouter", "useTransition"] }
+  { id: 3, text: "Để chuyển trang trong React Router v6, ta dùng hook nào?", options: ["useHistory", "useNavigate", "useRouter", "useTransition"] },
+  { id: 4, text: "React được phát triển bởi công ty nào?", options: ["Google", "Facebook", "Microsoft", "Apple"] },
+  { id: 5, text: "Hook nào dùng để quản lý state cơ bản nhất?", options: ["useEffect", "useContext", "useState", "useReducer"] },
+  { id: 6, text: "Để chuyển trang trong React Router v6, ta dùng hook nào?", options: ["useHistory", "useNavigate", "useRouter", "useTransition"] },
+  { id: 7, text: "Để chuyển trang trong React Router v6, ta dùng hook nào?", options: ["useHistory", "useNavigate", "useRouter", "useTransition"] },
 ];
 
 const ExamRoom = () => {
