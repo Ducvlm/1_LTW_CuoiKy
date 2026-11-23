@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -27,6 +27,7 @@ import {
 import Skeleton from '../components/ui/Skeleton';
 import ConfirmModal from '../components/ui/ConfirmModal';
 import { ToastContainer, useToasts } from '../components/ui/Toast';
+import axiosClient from '../api/axiosClient';
 
 /* ======================= HẰNG SỐ GIAO DIỆN ======================= */
 const cardCls = 'bg-white rounded-xl border border-slate-200/80 shadow-sm';
@@ -173,6 +174,7 @@ const AdminDashboard = () => {
 
   const [users, setUsers] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [serverStats, setServerStats] = useState({ totalExams: 0, totalQuestions: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -181,58 +183,50 @@ const AdminDashboard = () => {
 
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'teacher' });
+  const [editingUser, setEditingUser] = useState(null);
 
   const [subjectForm, setSubjectForm] = useState({ subjectCode: '', name: '' });
   const [editingSubjectId, setEditingSubjectId] = useState(null);
 
-  // State giao diện mới: modal xác nhận, trạng thái gửi form, toast
-  const [confirmTarget, setConfirmTarget] = useState(null); // { kind: 'user' | 'subject', id, name }
+  const [confirmTarget, setConfirmTarget] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { toasts, pushToast, dismissToast } = useToasts();
 
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
-  const authHeaders = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  };
+  const fetchData = useCallback(async (isManualRefresh = false) => {
+  if (isManualRefresh) setRefreshing(true);
+  else setLoading(true);
 
-  const fetchData = async (isManualRefresh = false) => {
-    if (isManualRefresh) setRefreshing(true);
-    else setLoading(true);
+  try {
+    const [usersData, subjectsData, statsData] = await Promise.all([
+      axiosClient.get('/admin/users'),
+      axiosClient.get('/admin/subjects'),
+      axiosClient.get('/admin/stats'),
+    ]);
 
-    try {
-      const [usersRes, subjectsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/admin/users', { headers: authHeaders }),
-        fetch('http://localhost:5000/api/admin/subjects', { headers: authHeaders })
-      ]);
-
-      if (usersRes.status === 401 || usersRes.status === 403) {
-        localStorage.clear();
-        navigate('/login');
-        return;
-      }
-
-      const usersData = await usersRes.json();
-      const subjectsData = await subjectsRes.json();
-
-      setUsers(Array.isArray(usersData) ? usersData : []);
-      setSubjects(Array.isArray(subjectsData) ? subjectsData : []);
-    } catch (err) {
-      console.error('Lỗi tải dữ liệu:', err);
-      pushToast('error', 'Không thể tải dữ liệu từ máy chủ. Vui lòng thử lại.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    setUsers(Array.isArray(usersData) ? usersData : []);
+    setSubjects(Array.isArray(subjectsData) ? subjectsData : []);
+    if (statsData) {
+      setServerStats({
+        totalExams: statsData.totalExams || 0,
+        totalQuestions: statsData.totalQuestions || 0,
+      });
     }
-  };
+  } catch (err) {
+    console.error('Lỗi tải dữ liệu:', err);
+    pushToast('error', err.message);
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, [pushToast]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+useEffect(() => {
+  fetchData();
+}, [fetchData]);
 
   const stats = useMemo(() => {
     const totalUsers = users.length;
@@ -241,25 +235,45 @@ const AdminDashboard = () => {
     const admins = users.filter(u => u.role === 'admin').length;
     const locked = users.filter(u => u.isActive === false).length;
     const active = totalUsers - locked;
-    return { totalUsers, students, teachers, admins, locked, active, totalSubjects: subjects.length };
-  }, [users, subjects]);
+    return {
+      totalUsers,
+      students,
+      teachers,
+      admins,
+      locked,
+      active,
+      totalSubjects: subjects.length,
+      totalExams: serverStats.totalExams,
+      totalQuestions: serverStats.totalQuestions,
+    };
+  }, [users, subjects, serverStats]);
 
+  // Đếm chính xác số tài khoản đăng ký trong từng ngày (7d) hoặc từng cụm 3 ngày (30d)
   const chartData = useMemo(() => {
-    const days = chartRange === '7d' ? 7 : 10;
+    const is7d = chartRange === '7d';
+    const steps = is7d ? 7 : 10;
+    const stepDays = is7d ? 1 : 3;
     const dayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
     const result = [];
     const now = new Date();
+    now.setHours(23, 59, 59, 999);
 
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - (chartRange === '7d' ? i : i * 3));
-      const label = chartRange === '7d'
-        ? dayLabels[d.getDay()]
-        : `${d.getDate()}/${d.getMonth() + 1}`;
+    for (let i = steps - 1; i >= 0; i--) {
+      const endWindow = new Date(now);
+      endWindow.setDate(now.getDate() - i * stepDays);
+
+      const startWindow = new Date(endWindow);
+      startWindow.setDate(endWindow.getDate() - (stepDays - 1));
+      startWindow.setHours(0, 0, 0, 0);
+
+      const label = is7d
+        ? dayLabels[endWindow.getDay()]
+        : `${endWindow.getDate()}/${endWindow.getMonth() + 1}`;
 
       const count = users.filter(u => {
         if (!u.createdAt) return false;
-        return new Date(u.createdAt).toDateString() === d.toDateString();
+        const created = new Date(u.createdAt);
+        return created >= startWindow && created <= endWindow;
       }).length;
 
       result.push({ label, value: count });
@@ -288,18 +302,12 @@ const AdminDashboard = () => {
     );
   }, [subjects, globalSearch]);
 
-  /* ---------- HÀNH ĐỘNG VỚI API (giữ nguyên endpoint & payload) ---------- */
+  /* ---------- HÀNH ĐỘNG VỚI API ---------- */
   const handleCreateUser = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/users', {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify(newUser)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      const data = await axiosClient.post('/admin/users', newUser);
       setNewUser({ username: '', email: '', password: '', role: 'teacher' });
       setShowAddUser(false);
       pushToast('success', data.message || 'Tạo tài khoản thành công!');
@@ -313,13 +321,11 @@ const AdminDashboard = () => {
 
   const handleRoleChange = async (user, newRole) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${user._id}`, {
-        method: 'PUT',
-        headers: authHeaders,
-        body: JSON.stringify({ username: user.username, role: newRole })
+      const data = await axiosClient.put(`/admin/users/${user._id}`, {
+        username: user.username,
+        email: user.email,
+        role: newRole
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
       pushToast('success', data.message || 'Cập nhật người dùng thành công!');
       fetchData(true);
     } catch (err) {
@@ -327,14 +333,30 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleUpdateUserSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setSubmitting(true);
+    try {
+      const data = await axiosClient.put(`/admin/users/${editingUser._id}`, {
+        username: editingUser.username,
+        email: editingUser.email,
+        role: editingUser.role,
+        password: editingUser.password
+      });
+      setEditingUser(null);
+      pushToast('success', data.message || 'Cập nhật tài khoản thành công!');
+      fetchData(true);
+    } catch (err) {
+      pushToast('error', err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleToggleStatus = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${id}/toggle-status`, {
-        method: 'PATCH',
-        headers: authHeaders
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      const data = await axiosClient.patch(`/admin/users/${id}/toggle-status`);
       pushToast('success', data.message);
       fetchData(true);
     } catch (err) {
@@ -342,15 +364,9 @@ const AdminDashboard = () => {
     }
   };
 
-  // Hàm xóa thực thi sau khi người dùng bấm "Xác nhận" trong modal
   const handleDeleteUser = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/users/${id}`, {
-        method: 'DELETE',
-        headers: authHeaders
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      const data = await axiosClient.delete(`/admin/users/${id}`);
       pushToast('success', data.message || 'Đã xóa người dùng thành công!');
       fetchData(true);
     } catch (err) {
@@ -360,20 +376,11 @@ const AdminDashboard = () => {
 
   const handleSubjectSubmit = async (e) => {
     e.preventDefault();
-    const url = editingSubjectId
-      ? `http://localhost:5000/api/admin/subjects/${editingSubjectId}`
-      : 'http://localhost:5000/api/admin/subjects';
-    const method = editingSubjectId ? 'PUT' : 'POST';
-
     setSubmitting(true);
     try {
-      const res = await fetch(url, {
-        method,
-        headers: authHeaders,
-        body: JSON.stringify(subjectForm)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      const data = editingSubjectId
+        ? await axiosClient.put(`/admin/subjects/${editingSubjectId}`, subjectForm)
+        : await axiosClient.post('/admin/subjects', subjectForm);
       setSubjectForm({ subjectCode: '', name: '' });
       setEditingSubjectId(null);
       pushToast('success', data.message);
@@ -385,15 +392,9 @@ const AdminDashboard = () => {
     }
   };
 
-  // Hàm xóa thực thi sau khi người dùng bấm "Xác nhận" trong modal
   const handleDeleteSubject = async (id) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/subjects/${id}`, {
-        method: 'DELETE',
-        headers: authHeaders
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      const data = await axiosClient.delete(`/admin/subjects/${id}`);
       pushToast('success', data.message || 'Đã xóa môn học thành công!');
       fetchData(true);
     } catch (err) {
@@ -730,7 +731,6 @@ const AdminDashboard = () => {
         </header>
 
         <main className="p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
-          {/* Ô tìm kiếm cho mobile */}
           {renderSearch('md:hidden')}
 
           {/* ===================== TỔNG QUAN ===================== */}
@@ -751,9 +751,9 @@ const AdminDashboard = () => {
                 />
                 <KpiCard
                   icon={Library}
-                  label="Môn học"
+                  label="Môn học & Ngân hàng đề"
                   value={stats.totalSubjects}
-                  hint="Đang có trong hệ thống"
+                  hint={`${stats.totalExams} đề thi · ${stats.totalQuestions} câu hỏi`}
                 />
                 <KpiCard
                   icon={ShieldCheck}
@@ -897,7 +897,13 @@ const AdminDashboard = () => {
                   <span className="text-xs text-slate-500">{filteredUsers.length} tài khoản</span>
                 </div>
 
-                <button onClick={() => setShowAddUser(!showAddUser)} className={showAddUser ? btnGhost : btnPrimary}>
+                <button
+                  onClick={() => {
+                    setShowAddUser(!showAddUser);
+                    setEditingUser(null);
+                  }}
+                  className={showAddUser ? btnGhost : btnPrimary}
+                >
                   {showAddUser ? <X size={16} /> : <UserPlus size={16} />}
                   {showAddUser ? 'Đóng biểu mẫu' : 'Cấp tài khoản mới'}
                 </button>
@@ -960,6 +966,75 @@ const AdminDashboard = () => {
                 </form>
               )}
 
+              {editingUser && (
+                <form
+                  onSubmit={handleUpdateUserSubmit}
+                  className="mx-4 sm:mx-5 mb-5 p-4 bg-indigo-50/50 rounded-xl border border-indigo-200/80 space-y-3 animate-fade-in"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-indigo-700">
+                      Chỉnh sửa tài khoản: {editingUser.username}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingUser(null)}
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Họ và tên</label>
+                      <input
+                        type="text"
+                        value={editingUser.username}
+                        onChange={e => setEditingUser({ ...editingUser, username: e.target.value })}
+                        required
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Email</label>
+                      <input
+                        type="email"
+                        value={editingUser.email}
+                        onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
+                        required
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Đặt lại mật khẩu</label>
+                      <input
+                        type="password"
+                        placeholder="Để trống nếu giữ nguyên"
+                        value={editingUser.password}
+                        onChange={e => setEditingUser({ ...editingUser, password: e.target.value })}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Vai trò</label>
+                      <select
+                        value={editingUser.role}
+                        disabled={editingUser._id === currentUser.id}
+                        onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                        className={inputCls}
+                      >
+                        <option value="teacher">Giảng viên</option>
+                        <option value="student">Thí sinh</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <button type="submit" disabled={submitting} className={btnPrimary}>
+                      {submitting && <Loader2 size={14} className="animate-spin" />}
+                      Lưu thay đổi
+                    </button>
+                  </div>
+                </form>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[720px] text-left border-collapse text-sm">
                   <thead>
@@ -1009,6 +1084,23 @@ const AdminDashboard = () => {
                           <td className="py-3.5 px-4 text-slate-500 hidden lg:table-cell">{formatDate(u.createdAt)}</td>
                           <td className="py-3.5 px-4">
                             <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => {
+                                  setShowAddUser(false);
+                                  setEditingUser({
+                                    _id: u._id,
+                                    username: u.username,
+                                    email: u.email,
+                                    role: u.role,
+                                    password: ''
+                                  });
+                                }}
+                                title="Sửa thông tin tài khoản"
+                                aria-label="Sửa thông tin tài khoản"
+                                className={`${iconBtn} hover:bg-indigo-50 hover:text-indigo-600`}
+                              >
+                                <Pencil size={16} />
+                              </button>
                               <button
                                 onClick={() => handleToggleStatus(u._id)}
                                 disabled={isSelf}

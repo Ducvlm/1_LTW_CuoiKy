@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { User, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, UserPlus } from 'lucide-react';
+import axiosClient from '../api/axiosClient';
 
 const Register = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
-    password: '',
-    role: 'student' // Mặc định là thí sinh
+    password: ''
   });
 
   const [message, setMessage] = useState('');
@@ -15,7 +15,6 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Lắng nghe thay đổi dữ liệu trên input
   const handleChange = (e) => {
     setFormData({
       ...formData,
@@ -23,38 +22,23 @@ const Register = () => {
     });
   };
 
-  // Xử lý khi bấm nút Đăng ký
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
     setError('');
 
-    // 1. Kiểm tra định dạng Email bằng Regex trực tiếp trước khi gửi
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(formData.email)) {
       setError('Định dạng email không hợp lệ (ví dụ: example@gmail.com)!');
-      return; // Dừng lại, không gọi API
+      return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Đăng ký thất bại!');
-      }
+      await axiosClient.post('/auth/register', formData);
 
       setMessage('Đăng ký tài khoản thành công! Bạn có thể chuyển sang trang đăng nhập.');
-      // Reset form sau khi đăng ký thành công
-      setFormData({ username: '', email: '', password: '', role: 'student' });
+      setFormData({ username: '', email: '', password: '' });
     } catch (err) {
       setError(err.message);
     } finally {

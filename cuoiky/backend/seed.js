@@ -1,29 +1,31 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const User = require('./models/User');
 const Subject = require('./models/Subject');
 const Question = require('./models/Question');
 const Exam = require('./models/Exam');
-const ExamDetails = require('./models/ExamDetails'); // Sửa tên file ở đây cho khớp với bạn nhé
+const ExamAttempts = require('./models/ExamAttempts');
 
 const seedData = async () => {
     try {
         await mongoose.connect(process.env.MONGO_URI);
         console.log('✅ Đang kết nối MongoDB để nạp đầy đủ 5 bảng...');
 
-        // Xóa dữ liệu cũ để tránh trùng lặp
         await User.deleteMany({});
         await Subject.deleteMany({});
         await Question.deleteMany({});
         await Exam.deleteMany({});
-        await ExamDetails.deleteMany({});
+        await ExamAttempts.deleteMany({});
+
+        const hashedPassword = await bcrypt.hash('123', 10);
 
         // 1. Tạo dữ liệu Users (3 vai trò: Admin, Teacher, Student)
         const users = await User.insertMany([
-            { username: 'Quản trị viên Admin', email: 'admin@gmail.com', password: '123', role: 'admin' },
-            { username: 'Giảng viên Java', email: 'teacher@gmail.com', password: '123', role: 'teacher' },
-            { username: 'Thí sinh Đức', email: 'duc@gmail.com', password: '123', role: 'student' }
+            { username: 'Quản trị viên Admin', email: 'admin@gmail.com', password: hashedPassword, role: 'admin' },
+            { username: 'Giảng viên Java', email: 'teacher@gmail.com', password: hashedPassword, role: 'teacher' },
+            { username: 'Thí sinh Đức', email: 'duc@gmail.com', password: hashedPassword, role: 'student' }
         ]);
         const teacher = users[1];
         const student = users[2];
@@ -68,8 +70,8 @@ const seedData = async () => {
             teacherId: teacher._id
         });
 
-        // 5. Tạo dữ liệu chi tiết bài làm (ExamDetails)
-        await ExamDetails.create({
+        // 5. Tạo dữ liệu chi tiết bài làm (ExamAttempts)
+        await ExamAttempts.create({
             userId: student._id,
             examId: exam._id,
             startTime: new Date(),
@@ -82,7 +84,7 @@ const seedData = async () => {
             submittedAt: new Date()
         });
 
-        console.log('🚀 Đã nạp thành công toàn bộ 5 bảng lên MongoDB Atlas!');
+        console.log('🚀 Đã nạp thành công toàn bộ 5 bảng lên MongoDB Atlas! (Mật khẩu mẫu: 123)');
         process.exit();
     } catch (error) {
         console.error('❌ Lỗi khi nạp dữ liệu:', error);
