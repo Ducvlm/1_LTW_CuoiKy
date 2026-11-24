@@ -1,19 +1,32 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 
+const isTokenExpired = (token) => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+};
+
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const token = localStorage.getItem('token');
-  const userStr = localStorage.getItem('user');
-  const user = userStr ? JSON.parse(userStr) : null;
+  let user = null;
 
-  // Chưa đăng nhập -> đẩy về trang Login
-  if (!token || !user) {
+  try {
+    user = JSON.parse(localStorage.getItem('user'));
+  } catch {
+    user = null;
+  }
+
+  if (!token || !user || isTokenExpired(token)) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     return <Navigate to="/login" replace />;
   }
 
-  // Đã đăng nhập nhưng sai quyền -> đẩy về trang chủ
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    alert('Bạn không có quyền truy cập trang này!');
     return <Navigate to="/" replace />;
   }
 

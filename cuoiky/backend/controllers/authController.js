@@ -2,33 +2,39 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// 1. API Đăng ký tài khoản
+// 1. API Đăng ký tài khoản (mặc định luôn là student)
 const register = async (req, res) => {
     try {
-        const { username, email, password, role } = req.body;
+        const { username, email, password } = req.body;
 
-        // Kiểm tra email đã tồn tại chưa
-        const existingUser = await User.findOne({ email });
+        if (!username || !email || !password) {
+            return res.status(400).json({ message: 'Vui lòng nhập đầy đủ họ tên, email và mật khẩu!' });
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+        const existingUser = await User.findOne({ email: normalizedEmail });
         if (existingUser) {
             return res.status(400).json({ message: 'Email này đã được sử dụng!' });
         }
 
-        // Mã hóa mật khẩu bằng bcrypt
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Tạo user mới (mặc định nếu không truyền role thì là student)
         const newUser = new User({
-            username,
-            email,
+            username: username.trim(),
+            email: normalizedEmail,
             password: hashedPassword,
-            role: role || 'student'
+            role: 'student'
         });
 
         await newUser.save();
         res.status(201).json({ message: 'Đăng ký tài khoản thành công!', userId: newUser._id });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi server khi đăng ký', error: error.message });
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Email này đã được sử dụng!' });
+        }
+        console.error('Lỗi đăng ký:', error);
+        res.status(500).json({ message: 'Lỗi server khi đăng ký tài khoản!' });
     }
 };
 
@@ -37,22 +43,21 @@ const login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Tìm user theo email
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email?.trim().toLowerCase() });
         if (!user) {
             return res.status(400).json({ message: 'Email hoặc mật khẩu không chính xác!' });
         }
-        if (!user.isActive) {
-            return res.status(403).json({ message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin!' });
-        }
 
-        // Kiểm tra mật khẩu khớp nhau qua bcrypt
+        // Kiểm tra mật khẩu trước để không làm lộ trạng thái tài khoản bị khóa
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ message: 'Email hoặc mật khẩu không chính xác!' });
         }
 
-        // Tạo JWT Token chứa userId và role (thời hạn 1 ngày)
+        if (user.isActive === false) {
+            return res.status(403).json({ message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin!' });
+        }
+
         const token = jwt.sign(
             { userId: user._id, role: user.role },
             process.env.JWT_SECRET,
@@ -70,7 +75,8 @@ const login = async (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ message: 'Lỗi server khi đăng nhập', error: error.message });
+        console.error('Lỗi đăng nhập:', error);
+        res.status(500).json({ message: 'Lỗi server khi đăng nhập!' });
     }
 };
 
