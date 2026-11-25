@@ -43,8 +43,7 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
           
-          <Route path="/exam-room" element={<ExamRoom />} />
-          <Route path="/exams" element={<ExamList />} />
+
           <Route
             path="login"
             element={
@@ -84,10 +83,15 @@ function App() {
             path="exams"
             element={
               <ProtectedRoute allowedRoles={['student', 'admin']}>
-                <WorkspacePlaceholder
-                  title="Phòng thi trực tuyến"
-                  description="Danh sách các đề thi đang mở và lịch sử làm bài của thí sinh."
-                />
+                <ExamList />
+              </ProtectedRoute>
+            }
+          />
+           <Route
+            path="exam-room/:examCode"
+            element={
+              <ProtectedRoute allowedRoles={['student', 'admin']}>
+                <ExamRoom />
               </ProtectedRoute>
             }
           />
