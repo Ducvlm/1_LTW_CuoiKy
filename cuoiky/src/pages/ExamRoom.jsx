@@ -36,7 +36,7 @@ const ExamRoom = () => {
         setAttemptId(data.attemptId);
         setExamInfo(data.exam);
 
-        // Khôi phục hoặc trộn mới đề thi theo từng attemptId
+        // 
         const examKey = `de_thi_${data.attemptId}`;
         const draftKey = `nhap_${data.attemptId}`;
 
@@ -55,7 +55,7 @@ const ExamRoom = () => {
         const savedAnswers = localStorage.getItem(draftKey);
         if (savedAnswers) setAnswers(JSON.parse(savedAnswers));
 
-        // Tính thời gian còn lại dựa trên startTime và serverTime từ Server
+        // 
         const startMs = new Date(data.startTime).getTime();
         const serverMs = new Date(data.serverTime).getTime();
         const endByDuration = startMs + data.exam.duration * 60 * 1000;
