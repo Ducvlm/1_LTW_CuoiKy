@@ -1,3 +1,6 @@
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+
 const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
@@ -5,6 +8,7 @@ const cors = require('cors');
 
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const examRoutes = require('./routes/examRoutes');
 
 dotenv.config();
 
@@ -24,6 +28,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/exams', examRoutes);
 
 app.listen(PORT, () => {
     console.log(`🚀 Server đang chạy trên cổng ${PORT}`);
