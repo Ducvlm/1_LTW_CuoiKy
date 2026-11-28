@@ -1,0 +1,4114 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+backend/
+  controllers/
+    adminController.js
+    authController.js
+    examController.js
+  middleware/
+    authMiddleware.js
+  models/
+    Exam.js
+    ExamAttempts.js
+    Question.js
+    Subject.js
+    User.js
+  routes/
+    adminRoutes.js
+    authRoutes.js
+    examRoutes.js
+  package.json
+  seed.js
+  server.js
+public/
+  favicon.ico
+  index.html
+  logo192.png
+  logo512.png
+  manifest.json
+  robots.txt
+src/
+  api/
+    axiosClient.js
+  components/
+    ui/
+      ConfirmModal.jsx
+      Skeleton.jsx
+      Toast.jsx
+    Layout.jsx
+    ProtectedRoute.jsx
+  pages/
+    AdminDashboard.jsx
+    ExamList.jsx
+    ExamRoom.jsx
+    Home.jsx
+    Login.jsx
+    Register.jsx
+  App.js
+  index.css
+  index.js
+  reportWebVitals.js
+  setupTests.js
+.gitignore
+package.json
+postcss.config.js
+README.md
+tailwind.config.js
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="backend/controllers/adminController.js">
+const User = require('../models/User');
+const Subject = require('../models/Subject');
+const Exam = require('../models/Exam');
+const Question = require('../models/Question');
+const bcrypt = require('bcryptjs');
+
+// ================= 1. THỐNG KÊ DASHBOARD =================
+const getDashboardStats = async (req, res) => {
+    try {
+        const [totalUsers, totalSubjects, totalExams, totalQuestions] = await Promise.all([
+            User.countDocuments(),
+            Subject.countDocuments(),
+            Exam.countDocuments(),
+            Question.countDocuments()
+        ]);
+
+        res.status(200).json({
+            totalUsers,
+            totalSubjects,
+            totalExams,
+            totalQuestions
+        });
+    } catch (error) {
+        console.error('Lỗi lấy thống kê:', error);
+        res.status(500).json({ message: 'Lỗi lấy thống kê hệ thống!' });
+    }
+};
+
+// ================= 2. QUẢN LÝ TÀI KHOẢN (USERS) =================
+const getAllUsers = async (req, res) => {
+    try {
+        const users = await User.find().select('-password').sort({ createdAt: -1 });
+        res.status(200).json(users);
+    } catch (error) {
+        console.error('Lỗi lấy danh sách user:', error);
+        res.status(500).json({ message: 'Lỗi lấy danh sách người dùng!' });
+    }
+};
+
+const createUser = async (req, res) => {
+    try {
+        const { username, email, password, role } = req.body;
+        if (!username || !email || !password) {
+            return res.status(400).json({ message: 'Vui lòng nhập đầy đủ thông tin!' });
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+        const existingUser = await User.findOne({ email: normalizedEmail });
+        if (existingUser) {
+            return res.status(400).json({ message: 'Email đã tồn tại trong hệ thống!' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const newUser = await User.create({
+            username: username.trim(),
+            email: normalizedEmail,
+            password: hashedPassword,
+            role: role || 'student'
+        });
+
+        const userResponse = newUser.toObject();
+        delete userResponse.password;
+
+        res.status(201).json({ message: 'Tạo tài khoản thành công!', user: userResponse });
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Email đã tồn tại trong hệ thống!' });
+        }
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ message: 'Dữ liệu vai trò không hợp lệ!' });
+        }
+        console.error('Lỗi tạo tài khoản:', error);
+        res.status(500).json({ message: 'Lỗi tạo tài khoản!' });
+    }
+};
+
+const updateUser = async (req, res) => {
+    try {
+        const { username, email, role, password } = req.body;
+        const targetId = req.params.id;
+
+        const targetUser = await User.findById(targetId);
+        if (!targetUser) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng!' });
+        }
+
+        if (targetId === req.user.userId && role && role !== targetUser.role) {
+            return res.status(400).json({ message: 'Không thể tự thay đổi vai trò của chính mình!' });
+        }
+
+        if (targetUser.role === 'admin' && role && role !== 'admin') {
+            const activeAdminCount = await User.countDocuments({ role: 'admin', isActive: { $ne: false } });
+            if (activeAdminCount <= 1) {
+                return res.status(400).json({ message: 'Không thể hạ quyền quản trị viên cuối cùng!' });
+            }
+        }
+
+        const updatePayload = {};
+        if (username) updatePayload.username = username.trim();
+        if (email) updatePayload.email = email.trim().toLowerCase();
+        if (role) updatePayload.role = role;
+        if (password && password.trim() !== '') {
+            const salt = await bcrypt.genSalt(10);
+            updatePayload.password = await bcrypt.hash(password, salt);
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(targetId, updatePayload, {
+            new: true,
+            runValidators: true
+        }).select('-password');
+
+        res.status(200).json({ message: 'Cập nhật người dùng thành công!', user: updatedUser });
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Email này đã được tài khoản khác sử dụng!' });
+        }
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ message: 'Dữ liệu cập nhật không hợp lệ!' });
+        }
+        console.error('Lỗi cập nhật user:', error);
+        res.status(500).json({ message: 'Lỗi cập nhật người dùng!' });
+    }
+};
+
+const toggleUserStatus = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng!' });
+        }
+
+        if (user._id.toString() === req.user.userId) {
+            return res.status(400).json({ message: 'Không thể tự khóa tài khoản đang đăng nhập!' });
+        }
+
+        if (user.role === 'admin' && user.isActive !== false) {
+            const activeAdminCount = await User.countDocuments({ role: 'admin', isActive: { $ne: false } });
+            if (activeAdminCount <= 1) {
+                return res.status(400).json({ message: 'Không thể khóa quản trị viên cuối cùng!' });
+            }
+        }
+
+        user.isActive = !user.isActive;
+        await user.save();
+
+        res.status(200).json({
+            message: user.isActive ? 'Đã mở khóa tài khoản!' : 'Đã khóa tài khoản!',
+            isActive: user.isActive
+        });
+    } catch (error) {
+        console.error('Lỗi đổi trạng thái user:', error);
+        res.status(500).json({ message: 'Lỗi thay đổi trạng thái tài khoản!' });
+    }
+};
+
+const deleteUser = async (req, res) => {
+    try {
+        if (req.params.id === req.user.userId) {
+            return res.status(400).json({ message: 'Không thể tự xóa tài khoản của chính mình!' });
+        }
+
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            return res.status(404).json({ message: 'Không tìm thấy người dùng!' });
+        }
+
+        if (user.role === 'admin') {
+            const adminCount = await User.countDocuments({ role: 'admin' });
+            if (adminCount <= 1) {
+                return res.status(400).json({ message: 'Không thể xóa quản trị viên cuối cùng!' });
+            }
+        }
+
+        await User.findByIdAndDelete(req.params.id);
+        res.status(200).json({ message: 'Đã xóa người dùng thành công!' });
+    } catch (error) {
+        console.error('Lỗi xóa user:', error);
+        res.status(500).json({ message: 'Lỗi xóa người dùng!' });
+    }
+};
+
+// ================= 3. QUẢN LÝ MÔN HỌC (SUBJECTS) =================
+const getAllSubjects = async (req, res) => {
+    try {
+        const subjects = await Subject.find().sort({ createdAt: -1 });
+        res.status(200).json(subjects);
+    } catch (error) {
+        console.error('Lỗi lấy danh sách môn học:', error);
+        res.status(500).json({ message: 'Lỗi lấy danh sách môn học!' });
+    }
+};
+
+const createSubject = async (req, res) => {
+    try {
+        const { subjectCode, name } = req.body;
+        if (!subjectCode || !name) {
+            return res.status(400).json({ message: 'Vui lòng nhập đầy đủ mã môn và tên môn!' });
+        }
+
+        const normalizedCode = subjectCode.trim().toUpperCase();
+        const existingSubject = await Subject.findOne({ subjectCode: normalizedCode });
+        if (existingSubject) {
+            return res.status(400).json({ message: 'Mã môn học này đã tồn tại!' });
+        }
+
+        const newSubject = await Subject.create({
+            subjectCode: normalizedCode,
+            name: name.trim()
+        });
+        res.status(201).json({ message: 'Thêm môn học thành công!', subject: newSubject });
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Mã môn học này đã tồn tại!' });
+        }
+        console.error('Lỗi thêm môn học:', error);
+        res.status(500).json({ message: 'Lỗi thêm môn học!' });
+    }
+};
+
+const updateSubject = async (req, res) => {
+    try {
+        const { subjectCode, name } = req.body;
+        const updatedSubject = await Subject.findByIdAndUpdate(
+            req.params.id,
+            {
+                subjectCode: subjectCode?.trim().toUpperCase(),
+                name: name?.trim()
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedSubject) {
+            return res.status(404).json({ message: 'Không tìm thấy môn học!' });
+        }
+
+        res.status(200).json({ message: 'Cập nhật môn học thành công!', subject: updatedSubject });
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Mã môn học này đã tồn tại!' });
+        }
+        console.error('Lỗi cập nhật môn học:', error);
+        res.status(500).json({ message: 'Lỗi cập nhật môn học!' });
+    }
+};
+
+const deleteSubject = async (req, res) => {
+    try {
+        const subjectId = req.params.id;
+        const used = (await Question.exists({ subjectId })) || (await Exam.exists({ subjectId }));
+        if (used) {
+            return res.status(409).json({
+                message: 'Môn học đang có câu hỏi hoặc đề thi liên kết, không thể xóa!'
+            });
+        }
+
+        const deletedSubject = await Subject.findByIdAndDelete(subjectId);
+        if (!deletedSubject) {
+            return res.status(404).json({ message: 'Không tìm thấy môn học!' });
+        }
+
+        res.status(200).json({ message: 'Đã xóa môn học thành công!' });
+    } catch (error) {
+        console.error('Lỗi xóa môn học:', error);
+        res.status(500).json({ message: 'Lỗi xóa môn học!' });
+    }
+};
+
+module.exports = {
+    getDashboardStats,
+    getAllUsers,
+    createUser,
+    updateUser,
+    toggleUserStatus,
+    deleteUser,
+    getAllSubjects,
+    createSubject,
+    updateSubject,
+    deleteSubject
+};
+</file>
+
+<file path="backend/controllers/authController.js">
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+// 1. API Đăng ký tài khoản (mặc định luôn là student)
+const register = async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+
+        if (!username || !email || !password) {
+            return res.status(400).json({ message: 'Vui lòng nhập đầy đủ họ tên, email và mật khẩu!' });
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+        const existingUser = await User.findOne({ email: normalizedEmail });
+        if (existingUser) {
+            return res.status(400).json({ message: 'Email này đã được sử dụng!' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const newUser = new User({
+            username: username.trim(),
+            email: normalizedEmail,
+            password: hashedPassword,
+            role: 'student'
+        });
+
+        await newUser.save();
+        res.status(201).json({ message: 'Đăng ký tài khoản thành công!', userId: newUser._id });
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({ message: 'Email này đã được sử dụng!' });
+        }
+        console.error('Lỗi đăng ký:', error);
+        res.status(500).json({ message: 'Lỗi server khi đăng ký tài khoản!' });
+    }
+};
+
+// 2. API Đăng nhập
+const login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        const user = await User.findOne({ email: email?.trim().toLowerCase() });
+        if (!user) {
+            return res.status(400).json({ message: 'Email hoặc mật khẩu không chính xác!' });
+        }
+
+        // Kiểm tra mật khẩu trước để không làm lộ trạng thái tài khoản bị khóa
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Email hoặc mật khẩu không chính xác!' });
+        }
+
+        if (user.isActive === false) {
+            return res.status(403).json({ message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin!' });
+        }
+
+        const token = jwt.sign(
+            { userId: user._id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '1d' }
+        );
+
+        res.status(200).json({
+            message: 'Đăng nhập thành công!',
+            token,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                role: user.role
+            }
+        });
+    } catch (error) {
+        console.error('Lỗi đăng nhập:', error);
+        res.status(500).json({ message: 'Lỗi server khi đăng nhập!' });
+    }
+};
+
+module.exports = { register, login };
+</file>
+
+<file path="backend/controllers/examController.js">
+const Exam = require('../models/Exam');
+const ExamAttempt = require('../models/ExamAttempts');
+
+
+const getAllExams = async (req, res) => {
+    try {
+        const exams = await Exam.find()
+            .populate('subjectId', 'subjectCode name')
+            .select('examCode title subjectId duration openTime closeTime maxAttempts')
+            .sort({ createdAt: -1 });
+
+        const now = new Date();
+        const result = exams.map((exam) => {
+            let status = 'Đang mở';
+            if (now < new Date(exam.openTime)) status = 'Chưa mở';
+            else if (now > new Date(exam.closeTime)) status = 'Đã đóng';
+
+            return {
+                _id: exam._id,
+                examCode: exam.examCode,
+                title: exam.title,
+                subject: exam.subjectId,
+                duration: exam.duration,
+                openTime: exam.openTime,
+                closeTime: exam.closeTime,
+                maxAttempts: exam.maxAttempts,
+                status
+            };
+        });
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('Lỗi lấy danh sách bài thi:', error);
+        res.status(500).json({ message: 'Lỗi server khi tải danh sách bài thi!' });
+    }
+};
+
+
+const joinExam = async (req, res) => {
+    try {
+        const { examCode } = req.body;
+        const userId = req.user.userId;
+
+        if (!examCode || !examCode.trim()) {
+            return res.status(400).json({ message: 'Vui lòng nhập mã đề thi!' });
+        }
+
+        const exam = await Exam.findOne({ examCode: examCode.trim().toUpperCase() })
+            .populate('questions')
+            .populate('subjectId', 'subjectCode name');
+
+        if (!exam) {
+            return res.status(404).json({ message: 'Mã đề thi không tồn tại!' });
+        }
+
+        const now = new Date();
+        if (now < new Date(exam.openTime)) {
+            return res.status(403).json({ message: 'Kỳ thi này chưa tới giờ mở!' });
+        }
+        if (now > new Date(exam.closeTime)) {
+            return res.status(403).json({ message: 'Kỳ thi này đã đóng!' });
+        }
+
+        
+        let attempt = await ExamAttempt.findOne({
+            userId,
+            examId: exam._id,
+            status: 'in-progress'
+        });
+
+        if (!attempt) {
+            const submittedCount = await ExamAttempt.countDocuments({
+                userId,
+                examId: exam._id,
+                status: 'submitted'
+            });
+
+            if (submittedCount >= exam.maxAttempts) {
+                return res.status(403).json({
+                    message: `Bạn đã hết lượt làm bài cho đề thi này (Tối đa ${exam.maxAttempts} lượt)!`
+                });
+            }
+
+            attempt = await ExamAttempt.create({
+                userId,
+                examId: exam._id,
+                startTime: now,
+                status: 'in-progress'
+            });
+        }
+
+        
+        const safeQuestions = exam.questions.map((q) => ({
+            _id: q._id,
+            content: q.content,
+            options: q.options,
+            isMultipleChoice: q.correctAnswers.length > 1
+        }));
+
+        res.status(200).json({
+            attemptId: attempt._id,
+            startTime: attempt.startTime,
+            serverTime: now,
+            exam: {
+                _id: exam._id,
+                examCode: exam.examCode,
+                title: exam.title,
+                duration: exam.duration,
+                openTime: exam.openTime,
+                closeTime: exam.closeTime,
+                subject: exam.subjectId
+            },
+            questions: safeQuestions
+        });
+    } catch (error) {
+        console.error('Lỗi vào phòng thi:', error);
+        res.status(500).json({ message: 'Lỗi server khi vào phòng thi!' });
+    }
+};
+
+
+const submitExam = async (req, res) => {
+    try {
+        const { attemptId, answers } = req.body;
+        const userId = req.user.userId;
+
+        const attempt = await ExamAttempt.findById(attemptId);
+        if (!attempt) {
+            return res.status(404).json({ message: 'Không tìm thấy phiên làm bài!' });
+        }
+        if (attempt.userId.toString() !== userId) {
+            return res.status(403).json({ message: 'Bạn không có quyền nộp bài làm này!' });
+        }
+        if (attempt.status === 'submitted') {
+            return res.status(400).json({ message: 'Bài thi này đã được nộp trước đó!' });
+        }
+
+        const exam = await Exam.findById(attempt.examId).populate('questions');
+        if (!exam) {
+            return res.status(404).json({ message: 'Không tìm thấy đề thi!' });
+        }
+
+        
+        const now = Date.now();
+        const endByDuration = new Date(attempt.startTime).getTime() + exam.duration * 60 * 1000;
+        const endByCloseTime = new Date(exam.closeTime).getTime();
+        const deadline = Math.min(endByDuration, endByCloseTime) + 15000;
+
+        if (now > deadline) {
+            return res.status(400).json({ message: 'Đã quá thời gian nộp bài!' });
+        }
+
+        
+        const submittedAnswers = Array.isArray(answers) ? answers : [];
+        const answerMap = new Map();
+        submittedAnswers.forEach((item) => {
+            if (item.questionId) {
+                answerMap.set(item.questionId.toString(), Array.isArray(item.selectedOptions) ? item.selectedOptions : []);
+            }
+        });
+
+        
+        let correctCount = 0;
+        exam.questions.forEach((q) => {
+            const selected = answerMap.get(q._id.toString()) || [];
+            const correct = q.correctAnswers || [];
+
+            const sortedSelected = [...selected].sort();
+            const sortedCorrect = [...correct].sort();
+
+            const isExactMatch =
+                sortedSelected.length === sortedCorrect.length &&
+                sortedSelected.every((val, idx) => val === sortedCorrect[idx]);
+
+            if (isExactMatch) correctCount += 1;
+        });
+
+        const totalQuestions = exam.questions.length;
+        const score = totalQuestions > 0 ? Number(((correctCount / totalQuestions) * 10).toFixed(2)) : 0;
+
+        attempt.answers = submittedAnswers;
+        attempt.correctCount = correctCount;
+        attempt.score = score;
+        attempt.status = 'submitted';
+        attempt.submittedAt = new Date();
+        await attempt.save();
+
+        res.status(200).json({
+            message: 'Nộp bài thành công!',
+            score,
+            correctCount,
+            totalQuestions
+        });
+    } catch (error) {
+        console.error('Lỗi nộp bài:', error);
+        res.status(500).json({ message: 'Lỗi server khi nộp bài!' });
+    }
+};
+
+module.exports = { getAllExams, joinExam, submitExam };
+</file>
+
+<file path="backend/middleware/authMiddleware.js">
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+// Middleware xác thực token và kiểm tra trạng thái tài khoản trong DB
+const verifyToken = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'Không tìm thấy token xác thực, vui lòng đăng nhập!' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.userId).select('role isActive');
+
+        if (!user) {
+            return res.status(401).json({ message: 'Tài khoản không tồn tại!' });
+        }
+        if (user.isActive === false) {
+            return res.status(401).json({ message: 'Tài khoản của bạn đã bị khóa!' });
+        }
+
+        req.user = { userId: user._id.toString(), role: user.role };
+        next();
+    } catch (error) {
+        return res.status(401).json({ message: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn!' });
+    }
+};
+
+// Middleware phân quyền theo danh sách các role được phép truy cập
+const verifyRole = (allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user || !allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Bạn không có quyền thực hiện hành động này!' });
+        }
+        next();
+    };
+};
+
+module.exports = { verifyToken, verifyRole };
+</file>
+
+<file path="backend/models/Exam.js">
+const mongoose = require('mongoose');
+const examSchema = new mongoose.Schema({
+    examCode: { type: String, required: true, unique: true }, // Sinh viên dùng mã này để vào thi
+    title: { type: String, required: true },
+    subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: true },
+    questions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }],
+    duration: { type: Number, required: true }, // phút
+    openTime: { type: Date, required: true },
+    closeTime: { type: Date, required: true },
+    maxAttempts: { type: Number, default: 1 },
+    teacherId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
+}, { timestamps: true });
+module.exports = mongoose.model('Exam', examSchema);
+</file>
+
+<file path="backend/models/ExamAttempts.js">
+const mongoose = require('mongoose');
+const examAttemptSchema = new mongoose.Schema({
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    examId: { type: mongoose.Schema.Types.ObjectId, ref: 'Exam', required: true },
+    startTime: { type: Date, default: Date.now }, // Lưu trên server để đếm ngược
+    status: { type: String, enum: ['in-progress', 'submitted'], default: 'in-progress' },
+    answers: [{ 
+        questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Question' },
+        selectedOptions: [{ type: String }] 
+    }], // Câu trả lời của sinh viên đẩy lên
+    score: { type: Number, default: null }, // Do server tính toán lúc nộp bài
+    correctCount: { type: Number, default: null },
+    submittedAt: { type: Date }
+}, { timestamps: true });
+module.exports = mongoose.model('ExamAttempt', examAttemptSchema);
+</file>
+
+<file path="backend/models/Question.js">
+const mongoose = require('mongoose');
+const questionSchema = new mongoose.Schema({
+    subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: true },
+    content: { type: String, required: true },
+    options: [{ type: String, required: true }],
+    correctAnswers: [{ type: String, required: true }], // Mảng để hỗ trợ 1 hoặc nhiều đáp án
+    difficulty: { type: String, enum: ['easy', 'medium', 'hard'], required: true },
+    teacherId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
+}, { timestamps: true });
+module.exports = mongoose.model('Question', questionSchema);
+</file>
+
+<file path="backend/models/Subject.js">
+const mongoose = require('mongoose');
+const subjectSchema = new mongoose.Schema({
+    subjectCode: { type: String, required: true, unique: true },
+    name: { type: String, required: true }
+}, { timestamps: true });
+module.exports = mongoose.model('Subject', subjectSchema);
+</file>
+
+<file path="backend/models/User.js">
+const mongoose = require('mongoose');
+
+const userSchema = new mongoose.Schema({
+    username: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    role: { 
+        type: String, 
+        enum: ['student', 'teacher', 'admin'], 
+        default: 'student' 
+    },
+    isActive: { type: Boolean, default: true } // Thêm trạng thái khóa/mở tài khoản
+}, { timestamps: true });
+
+module.exports = mongoose.model('User', userSchema);
+</file>
+
+<file path="backend/routes/adminRoutes.js">
+const express = require('express');
+const router = express.Router();
+const { verifyToken, verifyRole } = require('../middleware/authMiddleware');
+const {
+    getDashboardStats,
+    getAllUsers,
+    createUser,
+    updateUser,
+    toggleUserStatus,
+    deleteUser,
+    getAllSubjects,
+    createSubject,
+    updateSubject,
+    deleteSubject
+} = require('../controllers/adminController');
+
+// Áp dụng bảo vệ: Bắt buộc đăng nhập & phải có quyền 'admin' cho tất cả route bên dưới
+router.use(verifyToken, verifyRole(['admin']));
+
+// Route thống kê tổng quan
+router.get('/stats', getDashboardStats);
+
+// Routes quản lý tài khoản (CRUD + Khóa/Mở)
+router.get('/users', getAllUsers);
+router.post('/users', createUser);
+router.put('/users/:id', updateUser);
+router.patch('/users/:id/toggle-status', toggleUserStatus);
+router.delete('/users/:id', deleteUser);
+
+// Routes quản lý môn học (CRUD)
+router.get('/subjects', getAllSubjects);
+router.post('/subjects', createSubject);
+router.put('/subjects/:id', updateSubject);
+router.delete('/subjects/:id', deleteSubject);
+
+module.exports = router;
+</file>
+
+<file path="backend/routes/authRoutes.js">
+const express = require('express');
+const router = express.Router();
+const { register, login } = require('../controllers/authController');
+
+router.post('/register', register);
+router.post('/login', login);
+
+module.exports = router;
+</file>
+
+<file path="backend/routes/examRoutes.js">
+const express = require('express');
+const router = express.Router();
+const { verifyToken } = require('../middleware/authMiddleware');
+const { getAllExams, joinExam, submitExam } = require('../controllers/examController');
+
+// Tất cả API phòng thi đều yêu cầu đăng nhập
+router.use(verifyToken);
+
+router.get('/', getAllExams);
+router.post('/join', joinExam);
+router.post('/submit', submitExam);
+
+module.exports = router;
+</file>
+
+<file path="backend/package.json">
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node seed.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.12.1"
+  }
+}
+</file>
+
+<file path="backend/seed.js">
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+require('dotenv').config();
+
+const User = require('./models/User');
+const Subject = require('./models/Subject');
+const Question = require('./models/Question');
+const Exam = require('./models/Exam');
+const ExamAttempts = require('./models/ExamAttempts');
+
+const seedData = async () => {
+    try {
+        await mongoose.connect(process.env.MONGO_URI);
+        console.log('✅ Đang kết nối MongoDB để nạp đầy đủ 5 bảng...');
+
+        await User.deleteMany({});
+        await Subject.deleteMany({});
+        await Question.deleteMany({});
+        await Exam.deleteMany({});
+        await ExamAttempts.deleteMany({});
+
+        const hashedPassword = await bcrypt.hash('123', 10);
+
+        // 1. Tạo dữ liệu Users (3 vai trò: Admin, Teacher, Student)
+        const users = await User.insertMany([
+            { username: 'Quản trị viên Admin', email: 'admin@gmail.com', password: hashedPassword, role: 'admin' },
+            { username: 'Giảng viên Java', email: 'teacher@gmail.com', password: hashedPassword, role: 'teacher' },
+            { username: 'Thí sinh Đức', email: 'duc@gmail.com', password: hashedPassword, role: 'student' }
+        ]);
+        const teacher = users[1];
+        const student = users[2];
+
+        // 2. Tạo dữ liệu Subjects (Môn học)
+        const subjects = await Subject.insertMany([
+            { subjectCode: 'INT1304', name: 'Lập trình hướng đối tượng Java' },
+            { subjectCode: 'INT1305', name: 'Cấu trúc dữ liệu và giải thuật' }
+        ]);
+        const javaSubject = subjects[0];
+
+        // 3. Tạo dữ liệu Questions (Ngân hàng câu hỏi)
+        const questions = await Question.insertMany([
+            {
+                subjectId: javaSubject._id,
+                content: 'Java là ngôn ngữ lập trình hướng đối tượng đúng hay sai?',
+                options: ['Đúng', 'Sai'],
+                correctAnswers: ['Đúng'],
+                difficulty: 'easy',
+                teacherId: teacher._id
+            },
+            {
+                subjectId: javaSubject._id,
+                content: 'Đâu là các tính chất của Lập trình hướng đối tượng?',
+                options: ['Tính đóng gói', 'Tính kế thừa', 'Tính đa hình', 'Tính tuần tự'],
+                correctAnswers: ['Tính đóng gói', 'Tính kế thừa', 'Tính đa hình'],
+                difficulty: 'medium',
+                teacherId: teacher._id
+            }
+        ]);
+
+        // 4. Tạo dữ liệu Exams (Đề thi)
+        const exam = await Exam.create({
+            examCode: 'JAVA01',
+            title: 'Kiểm tra giữa kỳ môn Java',
+            subjectId: javaSubject._id,
+            questions: [questions[0]._id, questions[1]._id],
+            duration: 45,
+            openTime: new Date(),
+            closeTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            maxAttempts: 2,
+            teacherId: teacher._id
+        });
+
+        // 5. Tạo dữ liệu chi tiết bài làm (ExamAttempts)
+        await ExamAttempts.create({
+            userId: student._id,
+            examId: exam._id,
+            startTime: new Date(),
+            status: 'submitted',
+            answers: [
+                { questionId: questions[0]._id, selectedOptions: ['Đúng'] }
+            ],
+            score: 5.0,
+            correctCount: 1,
+            submittedAt: new Date()
+        });
+
+        console.log('🚀 Đã nạp thành công toàn bộ 5 bảng lên MongoDB Atlas! (Mật khẩu mẫu: 123)');
+        process.exit();
+    } catch (error) {
+        console.error('❌ Lỗi khi nạp dữ liệu:', error);
+        process.exit(1);
+    }
+};
+
+seedData();
+</file>
+
+<file path="backend/server.js">
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '1.1.1.1']);
+
+const express = require('express');
+const mongoose = require('mongoose');
+const dotenv = require('dotenv');
+const cors = require('cors');
+
+const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const examRoutes = require('./routes/examRoutes');
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+app.use(cors());
+app.use(express.json());
+
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('✅ Kết nối MongoDB Atlas thành công!'))
+  .catch((err) => console.error('❌ Lỗi kết nối MongoDB:', err));
+
+app.get('/', (req, res) => {
+    res.send('API QuizMaster đang chạy...');
+});
+
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/exams', examRoutes);
+
+app.listen(PORT, () => {
+    console.log(`🚀 Server đang chạy trên cổng ${PORT}`);
+});
+</file>
+
+<file path="public/index.html">
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#4f46e5" />
+    <meta
+      name="description"
+      content="QuizMaster - Hệ thống thi trắc nghiệm trực tuyến dành cho giảng viên và thí sinh."
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <title>QuizMaster | Hệ thống thi trắc nghiệm trực tuyến</title>
+  </head>
+  <body>
+    <noscript>Bạn cần bật JavaScript để chạy ứng dụng này.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+</file>
+
+<file path="public/manifest.json">
+{
+  "short_name": "QuizMaster",
+  "name": "QuizMaster - Hệ thống thi trắc nghiệm trực tuyến",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#4f46e5",
+  "background_color": "#f8fafc"
+}
+</file>
+
+<file path="public/robots.txt">
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Disallow:
+</file>
+
+<file path="src/api/axiosClient.js">
+import axios from 'axios';
+
+const axiosClient = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+axiosClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+axiosClient.interceptors.response.use(
+  (response) => response.data,
+  (error) => {
+    if (error.response?.status === 401 && !window.location.pathname.startsWith('/login')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    const message = error.response?.data?.message || 'Không thể kết nối tới máy chủ!';
+    return Promise.reject(new Error(message));
+  }
+);
+
+export default axiosClient;
+</file>
+
+<file path="src/components/ui/ConfirmModal.jsx">
+import React, { useEffect } from 'react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
+
+const ConfirmModal = ({
+  open,
+  title,
+  message,
+  confirmLabel = 'Xác nhận',
+  cancelLabel = 'Hủy',
+  loading = false,
+  onConfirm,
+  onCancel,
+}) => {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape' && !loading) onCancel();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open, loading, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px] animate-fade-in"
+      onClick={() => !loading && onCancel()}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-xl p-6 animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+            <AlertTriangle size={20} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+            <p className="mt-1.5 text-sm text-slate-500 leading-relaxed">{message}</p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="h-9 px-4 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition disabled:opacity-60 cursor-pointer"
+          >
+            {cancelLabel}
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 h-9 px-4 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition disabled:opacity-60 cursor-pointer"
+          >
+            {loading && <Loader2 size={14} className="animate-spin" />}
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ConfirmModal;
+</file>
+
+<file path="src/components/ui/Skeleton.jsx">
+import React from 'react';
+
+const Skeleton = ({ className = '' }) => (
+  <div className={`animate-pulse rounded-md bg-slate-200/70 ${className}`} />
+);
+
+export default Skeleton;
+</file>
+
+<file path="src/components/ui/Toast.jsx">
+import React, { useState, useCallback } from 'react';
+import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+
+const TOAST_STYLE = {
+  success: { icon: CheckCircle2, iconCls: 'text-emerald-500' },
+  error: { icon: AlertCircle, iconCls: 'text-rose-500' },
+  info: { icon: Info, iconCls: 'text-indigo-500' },
+};
+
+// Hook quản lý danh sách toast: pushToast('success' | 'error' | 'info', 'Nội dung')
+export const useToasts = () => {
+  const [toasts, setToasts] = useState([]);
+
+  const dismissToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const pushToast = useCallback(
+    (type, message) => {
+      const id = Date.now() + Math.random();
+      setToasts((prev) => [...prev, { id, type, message }]);
+      setTimeout(() => dismissToast(id), 4000);
+    },
+    [dismissToast]
+  );
+
+  return { toasts, pushToast, dismissToast };
+};
+
+export const ToastContainer = ({ toasts, onDismiss }) => (
+  <div className="fixed top-4 right-4 z-[60] flex flex-col gap-2 w-[calc(100%-2rem)] sm:w-96 pointer-events-none">
+    {toasts.map((t) => {
+      const { icon: Icon, iconCls } = TOAST_STYLE[t.type] || TOAST_STYLE.info;
+      return (
+        <div
+          key={t.id}
+          role="status"
+          className="pointer-events-auto flex items-start gap-3 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-900/5 px-4 py-3 animate-slide-up"
+        >
+          <Icon size={18} className={`mt-0.5 shrink-0 ${iconCls}`} />
+          <p className="flex-1 text-sm text-slate-700 leading-5">{t.message}</p>
+          <button
+            onClick={() => onDismiss(t.id)}
+            className="shrink-0 p-0.5 rounded text-slate-400 hover:text-slate-600 transition cursor-pointer"
+            aria-label="Đóng thông báo"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      );
+    })}
+  </div>
+);
+</file>
+
+<file path="src/components/Layout.jsx">
+import React, { useState } from 'react';
+import { Outlet, Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { GraduationCap, LogOut, Menu, X, Home, ShieldCheck, Library, ClipboardList } from 'lucide-react';
+
+const ROLE_LABEL = {
+  admin: 'Quản trị viên',
+  teacher: 'Giảng viên',
+  student: 'Thí sinh',
+};
+
+const ROLE_STYLE = {
+  admin: 'bg-violet-50 text-violet-700 ring-violet-600/20',
+  teacher: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
+  student: 'bg-slate-100 text-slate-700 ring-slate-500/20',
+};
+
+const Layout = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+
+  const isAdminPage = location.pathname.startsWith('/admin');
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setMobileOpen(false);
+    navigate('/login');
+  };
+
+  if (isAdminPage) {
+    return <Outlet />;
+  }
+
+  const navItems = [{ to: '/', label: 'Trang chủ', icon: Home, end: true }];
+  if (user?.role === 'admin') {
+    navItems.push({ to: '/admin', label: 'Quản trị hệ thống', icon: ShieldCheck });
+  }
+  if (user?.role === 'teacher') {
+    navItems.push({ to: '/teacher', label: 'Ngân hàng đề thi', icon: Library });
+  }
+  if (user?.role === 'student') {
+    navItems.push({ to: '/exams', label: 'Phòng thi trực tuyến', icon: ClipboardList });
+  }
+
+  const desktopLinkCls = ({ isActive }) =>
+    `relative h-16 inline-flex items-center text-sm font-medium transition-colors ${
+      isActive
+        ? 'text-indigo-700 after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-indigo-600 after:rounded-full'
+        : 'text-slate-600 hover:text-slate-900'
+    }`;
+
+  const mobileLinkCls = ({ isActive }) =>
+    `flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+      isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'
+    }`;
+
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
+      <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-slate-200/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-10">
+            <Link to="/" className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                <GraduationCap size={18} />
+              </div>
+              <span className="text-base font-semibold tracking-tight text-slate-900">
+                Quiz<span className="text-indigo-600">Master</span>
+              </span>
+            </Link>
+
+            <nav className="hidden md:flex items-center gap-7">
+              {navItems.map((item) => (
+                <NavLink key={item.to} to={item.to} end={item.end} className={desktopLinkCls}>
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {user ? (
+              <>
+                <div className="hidden sm:flex items-center gap-2.5 pl-1 pr-3 py-1 rounded-full border border-slate-200 bg-white">
+                  <span className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold flex items-center justify-center">
+                    {(user.username || '?').charAt(0).toUpperCase()}
+                  </span>
+                  <span className="text-sm font-medium text-slate-800 max-w-[140px] truncate">
+                    {user.username}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium ring-1 ring-inset ${
+                      ROLE_STYLE[user.role] || ROLE_STYLE.student
+                    }`}
+                  >
+                    {ROLE_LABEL[user.role] || user.role}
+                  </span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 text-sm font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                >
+                  <LogOut size={16} />
+                  Đăng xuất
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="hidden sm:inline-flex items-center h-9 px-3.5 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                >
+                  Đăng nhập
+                </Link>
+                <Link
+                  to="/register"
+                  className="hidden sm:inline-flex items-center h-9 px-3.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition"
+                >
+                  Đăng ký
+                </Link>
+              </>
+            )}
+
+            <button
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="md:hidden w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              aria-label="Mở menu"
+            >
+              {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
+        </div>
+
+        {/* MENU MOBILE */}
+        {mobileOpen && (
+          <div className="md:hidden border-t border-slate-200/80 bg-white px-4 py-3 space-y-1 animate-fade-in">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  onClick={() => setMobileOpen(false)}
+                  className={mobileLinkCls}
+                >
+                  <Icon size={18} />
+                  {item.label}
+                </NavLink>
+              );
+            })}
+
+            <div className="pt-3 mt-2 border-t border-slate-100">
+              {user ? (
+                <div className="flex items-center justify-between gap-3 px-1">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold flex items-center justify-center shrink-0">
+                      {(user.username || '?').charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-slate-800 truncate">{user.username}</div>
+                      <div className="text-xs text-slate-500">{ROLE_LABEL[user.role] || user.role}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="inline-flex items-center gap-1.5 h-9 px-3 text-sm font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition cursor-pointer"
+                  >
+                    <LogOut size={16} />
+                    Đăng xuất
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="h-10 inline-flex items-center justify-center text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                  >
+                    Đăng nhập
+                  </Link>
+                  <Link
+                    to="/register"
+                    onClick={() => setMobileOpen(false)}
+                    className="h-10 inline-flex items-center justify-center text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition"
+                  >
+                    Đăng ký
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </header>
+
+      <main className="flex-1">
+        <Outlet />
+      </main>
+
+      <footer className="border-t border-slate-200/80 bg-white py-5 px-6 text-center text-xs text-slate-500">
+        © 2026 QuizMaster — Hệ thống thi trắc nghiệm trực tuyến
+      </footer>
+    </div>
+  );
+};
+
+export default Layout;
+</file>
+
+<file path="src/components/ProtectedRoute.jsx">
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+
+const isTokenExpired = (token) => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+};
+
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const token = localStorage.getItem('token');
+  let user = null;
+
+  try {
+    user = JSON.parse(localStorage.getItem('user'));
+  } catch {
+    user = null;
+  }
+
+  if (!token || !user || isTokenExpired(token)) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+};
+
+export default ProtectedRoute;
+</file>
+
+<file path="src/pages/AdminDashboard.jsx">
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Users,
+  BookOpen,
+  Search,
+  Menu,
+  RefreshCw,
+  LogOut,
+  UserPlus,
+  X,
+  Pencil,
+  Trash2,
+  Lock,
+  Unlock,
+  ArrowLeft,
+  ChevronRight,
+  TrendingUp,
+  GraduationCap,
+  ShieldCheck,
+  Library,
+  Plus,
+  Inbox,
+  Loader2,
+} from 'lucide-react';
+import Skeleton from '../components/ui/Skeleton';
+import ConfirmModal from '../components/ui/ConfirmModal';
+import { ToastContainer, useToasts } from '../components/ui/Toast';
+import axiosClient from '../api/axiosClient';
+
+/* ======================= HẰNG SỐ GIAO DIỆN ======================= */
+const cardCls = 'bg-white rounded-xl border border-slate-200/80 shadow-sm';
+
+const inputCls =
+  'w-full h-9 px-3 text-sm rounded-lg border border-slate-200 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed';
+
+const btnPrimary =
+  'inline-flex items-center justify-center gap-1.5 h-9 px-3.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer';
+
+const btnGhost =
+  'inline-flex items-center justify-center gap-1.5 h-9 px-3.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer';
+
+const iconBtn =
+  'inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-500 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed';
+
+const thCls = 'py-3 px-4 text-xs font-medium uppercase tracking-wide text-slate-500';
+
+const ROLE_META = {
+  admin: { label: 'Admin', className: 'bg-violet-50 text-violet-700 ring-violet-600/15' },
+  teacher: { label: 'Giảng viên', className: 'bg-indigo-50 text-indigo-700 ring-indigo-600/15' },
+  student: { label: 'Thí sinh', className: 'bg-slate-100 text-slate-700 ring-slate-500/15' },
+};
+
+const PAGE_META = {
+  overview: { title: 'Tổng quan', crumb: 'Tổng quan' },
+  users: { title: 'Quản lý tài khoản', crumb: 'Tài khoản' },
+  subjects: { title: 'Quản lý môn học', crumb: 'Môn học' },
+};
+
+const formatDate = (value) => (value ? new Date(value).toLocaleDateString('vi-VN') : '—');
+
+/* ======================= COMPONENT PHỤ ======================= */
+const RoleBadge = ({ role }) => {
+  const meta = ROLE_META[role] || ROLE_META.student;
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ring-1 ring-inset ${meta.className}`}
+    >
+      {meta.label}
+    </span>
+  );
+};
+
+const StatusBadge = ({ active }) => (
+  <span
+    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium ring-1 ring-inset ${
+      active
+        ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/15'
+        : 'bg-rose-50 text-rose-700 ring-rose-600/15'
+    }`}
+  >
+    <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+    {active ? 'Hoạt động' : 'Đã khóa'}
+  </span>
+);
+
+const Avatar = ({ name, className = 'w-8 h-8 text-xs' }) => (
+  <span
+    className={`inline-flex items-center justify-center rounded-full bg-indigo-50 text-indigo-700 font-semibold shrink-0 ${className}`}
+  >
+    {(name || '?').charAt(0).toUpperCase()}
+  </span>
+);
+
+const KpiCard = ({ icon: Icon, label, value, hint }) => (
+  <div className={`${cardCls} p-5 flex items-start gap-4`}>
+    <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+      <Icon size={20} />
+    </div>
+    <div className="min-w-0">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-0.5 text-2xl font-semibold tracking-tight text-slate-900">{value}</div>
+      <div className="mt-0.5 text-xs text-slate-500 truncate">{hint}</div>
+    </div>
+  </div>
+);
+
+const EmptyState = ({ title, hint }) => (
+  <div className="flex flex-col items-center justify-center py-12 text-center">
+    <div className="w-11 h-11 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
+      <Inbox size={20} />
+    </div>
+    <div className="mt-3 text-sm font-medium text-slate-700">{title}</div>
+    <div className="mt-1 text-xs text-slate-500">{hint}</div>
+  </div>
+);
+
+const DashboardSkeleton = () => (
+  <div className="flex min-h-screen bg-slate-50">
+    <aside className="hidden lg:flex w-64 bg-white border-r border-slate-200/80 flex-col p-4 gap-3 shrink-0">
+      <Skeleton className="h-8 w-36" />
+      <div className="mt-6 space-y-2">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    </aside>
+    <div className="flex-1 min-w-0">
+      <div className="h-16 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-9 w-56" />
+      </div>
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className={`${cardCls} p-5 flex gap-4`}>
+              <Skeleton className="w-10 h-10 rounded-lg" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-6 w-16" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className={`${cardCls} lg:col-span-2 p-5`}>
+            <Skeleton className="h-4 w-48 mb-5" />
+            <Skeleton className="h-52 w-full" />
+          </div>
+          <div className={`${cardCls} p-5`}>
+            <Skeleton className="h-4 w-32 mb-5" />
+            <Skeleton className="h-40 w-40 rounded-full mx-auto" />
+          </div>
+        </div>
+        <div className={`${cardCls} p-5 space-y-3`}>
+          <Skeleton className="h-4 w-44" />
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+/* ======================= TRANG CHÍNH ======================= */
+const AdminDashboard = () => {
+  const [activeMenu, setActiveMenu] = useState('overview');
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
+  const [chartRange, setChartRange] = useState('7d');
+  const [globalSearch, setGlobalSearch] = useState('');
+
+  const [users, setUsers] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [serverStats, setServerStats] = useState({ totalExams: 0, totalQuestions: 0 });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUser, setNewUser] = useState({ username: '', email: '', password: '', role: 'teacher' });
+  const [editingUser, setEditingUser] = useState(null);
+
+  const [subjectForm, setSubjectForm] = useState({ subjectCode: '', name: '' });
+  const [editingSubjectId, setEditingSubjectId] = useState(null);
+
+  const [confirmTarget, setConfirmTarget] = useState(null);
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const { toasts, pushToast, dismissToast } = useToasts();
+
+  const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+  const fetchData = useCallback(async (isManualRefresh = false) => {
+  if (isManualRefresh) setRefreshing(true);
+  else setLoading(true);
+
+  try {
+    const [usersData, subjectsData, statsData] = await Promise.all([
+      axiosClient.get('/admin/users'),
+      axiosClient.get('/admin/subjects'),
+      axiosClient.get('/admin/stats'),
+    ]);
+
+    setUsers(Array.isArray(usersData) ? usersData : []);
+    setSubjects(Array.isArray(subjectsData) ? subjectsData : []);
+    if (statsData) {
+      setServerStats({
+        totalExams: statsData.totalExams || 0,
+        totalQuestions: statsData.totalQuestions || 0,
+      });
+    }
+  } catch (err) {
+    console.error('Lỗi tải dữ liệu:', err);
+    pushToast('error', err.message);
+  } finally {
+    setLoading(false);
+    setRefreshing(false);
+  }
+}, [pushToast]);
+
+useEffect(() => {
+  fetchData();
+}, [fetchData]);
+
+  const stats = useMemo(() => {
+    const totalUsers = users.length;
+    const students = users.filter(u => u.role === 'student').length;
+    const teachers = users.filter(u => u.role === 'teacher').length;
+    const admins = users.filter(u => u.role === 'admin').length;
+    const locked = users.filter(u => u.isActive === false).length;
+    const active = totalUsers - locked;
+    return {
+      totalUsers,
+      students,
+      teachers,
+      admins,
+      locked,
+      active,
+      totalSubjects: subjects.length,
+      totalExams: serverStats.totalExams,
+      totalQuestions: serverStats.totalQuestions,
+    };
+  }, [users, subjects, serverStats]);
+
+  // Đếm chính xác số tài khoản đăng ký trong từng ngày (7d) hoặc từng cụm 3 ngày (30d)
+  const chartData = useMemo(() => {
+    const is7d = chartRange === '7d';
+    const steps = is7d ? 7 : 10;
+    const stepDays = is7d ? 1 : 3;
+    const dayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const result = [];
+    const now = new Date();
+    now.setHours(23, 59, 59, 999);
+
+    for (let i = steps - 1; i >= 0; i--) {
+      const endWindow = new Date(now);
+      endWindow.setDate(now.getDate() - i * stepDays);
+
+      const startWindow = new Date(endWindow);
+      startWindow.setDate(endWindow.getDate() - (stepDays - 1));
+      startWindow.setHours(0, 0, 0, 0);
+
+      const label = is7d
+        ? dayLabels[endWindow.getDay()]
+        : `${endWindow.getDate()}/${endWindow.getMonth() + 1}`;
+
+      const count = users.filter(u => {
+        if (!u.createdAt) return false;
+        const created = new Date(u.createdAt);
+        return created >= startWindow && created <= endWindow;
+      }).length;
+
+      result.push({ label, value: count });
+    }
+    return result;
+  }, [users, chartRange]);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => {
+      const matchSearch =
+        u.username?.toLowerCase().includes(globalSearch.toLowerCase()) ||
+        u.email?.toLowerCase().includes(globalSearch.toLowerCase());
+      const matchRole = roleFilter === 'all' || u.role === roleFilter;
+      const matchStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && u.isActive !== false) ||
+        (statusFilter === 'locked' && u.isActive === false);
+      return matchSearch && matchRole && matchStatus;
+    });
+  }, [users, globalSearch, roleFilter, statusFilter]);
+
+  const filteredSubjects = useMemo(() => {
+    return subjects.filter(s =>
+      s.subjectCode?.toLowerCase().includes(globalSearch.toLowerCase()) ||
+      s.name?.toLowerCase().includes(globalSearch.toLowerCase())
+    );
+  }, [subjects, globalSearch]);
+
+  /* ---------- HÀNH ĐỘNG VỚI API ---------- */
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const data = await axiosClient.post('/admin/users', newUser);
+      setNewUser({ username: '', email: '', password: '', role: 'teacher' });
+      setShowAddUser(false);
+      pushToast('success', data.message || 'Tạo tài khoản thành công!');
+      fetchData(true);
+    } catch (err) {
+      pushToast('error', err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRoleChange = async (user, newRole) => {
+    try {
+      const data = await axiosClient.put(`/admin/users/${user._id}`, {
+        username: user.username,
+        email: user.email,
+        role: newRole
+      });
+      pushToast('success', data.message || 'Cập nhật người dùng thành công!');
+      fetchData(true);
+    } catch (err) {
+      pushToast('error', err.message);
+    }
+  };
+
+  const handleUpdateUserSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setSubmitting(true);
+    try {
+      const data = await axiosClient.put(`/admin/users/${editingUser._id}`, {
+        username: editingUser.username,
+        email: editingUser.email,
+        role: editingUser.role,
+        password: editingUser.password
+      });
+      setEditingUser(null);
+      pushToast('success', data.message || 'Cập nhật tài khoản thành công!');
+      fetchData(true);
+    } catch (err) {
+      pushToast('error', err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleToggleStatus = async (id) => {
+    try {
+      const data = await axiosClient.patch(`/admin/users/${id}/toggle-status`);
+      pushToast('success', data.message);
+      fetchData(true);
+    } catch (err) {
+      pushToast('error', err.message);
+    }
+  };
+
+  const handleDeleteUser = async (id) => {
+    try {
+      const data = await axiosClient.delete(`/admin/users/${id}`);
+      pushToast('success', data.message || 'Đã xóa người dùng thành công!');
+      fetchData(true);
+    } catch (err) {
+      pushToast('error', err.message);
+    }
+  };
+
+  const handleSubjectSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const data = editingSubjectId
+        ? await axiosClient.put(`/admin/subjects/${editingSubjectId}`, subjectForm)
+        : await axiosClient.post('/admin/subjects', subjectForm);
+      setSubjectForm({ subjectCode: '', name: '' });
+      setEditingSubjectId(null);
+      pushToast('success', data.message);
+      fetchData(true);
+    } catch (err) {
+      pushToast('error', err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteSubject = async (id) => {
+    try {
+      const data = await axiosClient.delete(`/admin/subjects/${id}`);
+      pushToast('success', data.message || 'Đã xóa môn học thành công!');
+      fetchData(true);
+    } catch (err) {
+      pushToast('error', err.message);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmTarget) return;
+    setConfirming(true);
+    if (confirmTarget.kind === 'user') {
+      await handleDeleteUser(confirmTarget.id);
+    } else {
+      await handleDeleteSubject(confirmTarget.id);
+    }
+    setConfirming(false);
+    setConfirmTarget(null);
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    navigate('/login');
+  };
+
+  const handleMenuClick = (id) => {
+    setActiveMenu(id);
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  };
+
+  /* ---------- BIỂU ĐỒ ---------- */
+  const renderAreaChart = () => {
+    const width = 620;
+    const height = 220;
+    const padX = 36;
+    const padY = 28;
+    const rawMax = Math.max(...chartData.map(d => d.value), 0);
+    const maxVal = Math.max(4, Math.ceil(rawMax / 4) * 4);
+
+    const points = chartData.map((d, idx) => {
+      const x = padX + (idx * (width - padX * 2)) / Math.max(chartData.length - 1, 1);
+      const y = height - padY - (d.value / maxVal) * (height - padY * 2);
+      return { x, y, ...d };
+    });
+
+    let pathD = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const curr = points[i];
+      const next = points[i + 1];
+      const ctrlX = (curr.x + next.x) / 2;
+      pathD += ` C ${ctrlX} ${curr.y}, ${ctrlX} ${next.y}, ${next.x} ${next.y}`;
+    }
+
+    const areaD = `${pathD} L ${points[points.length - 1].x} ${height - padY} L ${points[0].x} ${height - padY} Z`;
+
+    return (
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
+        <defs>
+          <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#4f46e5" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#4f46e5" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+          const y = height - padY - ratio * (height - padY * 2);
+          const val = Math.round(ratio * maxVal);
+          return (
+            <g key={idx}>
+              <line x1={padX} y1={y} x2={width - padX} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray={ratio === 0 ? '0' : '3 4'} />
+              <text x={padX - 10} y={y + 4} textAnchor="end" fontSize="11" fill="#94a3b8">{val}</text>
+            </g>
+          );
+        })}
+
+        <path d={areaD} fill="url(#areaGrad)" />
+        <path d={pathD} fill="none" stroke="#4f46e5" strokeWidth="2.5" strokeLinecap="round" />
+
+        {points.map((p, idx) => (
+          <g key={idx}>
+            <circle cx={p.x} cy={p.y} r="4" fill="#4f46e5" stroke="#fff" strokeWidth="2">
+              <title>{`${p.label}: ${p.value} tài khoản`}</title>
+            </circle>
+            <text x={p.x} y={height - 6} textAnchor="middle" fontSize="11" fill="#64748b">{p.label}</text>
+          </g>
+        ))}
+      </svg>
+    );
+  };
+
+  const renderDonutChart = () => {
+    const total = Math.max(stats.totalUsers, 1);
+    const segments = [
+      { label: 'Thí sinh', value: stats.students, color: '#4f46e5' },
+      { label: 'Giảng viên', value: stats.teachers, color: '#38bdf8' },
+      { label: 'Quản trị viên', value: stats.admins, color: '#94a3b8' }
+    ];
+
+    const radius = 56;
+    const circumference = 2 * Math.PI * radius;
+    let offsetAcc = 0;
+    const arcs = segments.map(seg => {
+      const len = (seg.value / total) * circumference;
+      const arc = { ...seg, len, offset: offsetAcc };
+      offsetAcc += len;
+      return arc;
+    });
+
+    return (
+      <div className="flex flex-col items-center">
+        <div className="relative w-40 h-40">
+          <svg viewBox="0 0 156 156" className="-rotate-90 w-full h-full">
+            <circle cx="78" cy="78" r={radius} fill="transparent" stroke="#f1f5f9" strokeWidth="18" />
+            {arcs.map((arc, idx) =>
+              arc.value === 0 ? null : (
+                <circle
+                  key={idx}
+                  cx="78"
+                  cy="78"
+                  r={radius}
+                  fill="transparent"
+                  stroke={arc.color}
+                  strokeWidth="18"
+                  strokeDasharray={`${arc.len} ${circumference - arc.len}`}
+                  strokeDashoffset={-arc.offset}
+                />
+              )
+            )}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-2xl font-semibold tracking-tight text-slate-900">{stats.totalUsers}</span>
+            <span className="text-xs text-slate-500">Tài khoản</span>
+          </div>
+        </div>
+
+        <div className="w-full mt-5 space-y-2">
+          {arcs.map((seg, idx) => (
+            <div key={idx} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 text-slate-600">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: seg.color }} />
+                {seg.label}
+              </div>
+              <div className="text-slate-900 font-medium">
+                {seg.value}
+                <span className="ml-1.5 text-xs font-normal text-slate-400">
+                  {Math.round((seg.value / total) * 100)}%
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="w-full mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <span className="inline-flex items-center gap-1.5">
+            <Lock size={12} /> Tài khoản đang bị khóa
+          </span>
+          <strong className="text-slate-700">{stats.locked}</strong>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSearch = (wrapperCls) => (
+    <div className={`relative ${wrapperCls}`}>
+      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <input
+        type="text"
+        placeholder="Tìm kiếm nhanh..."
+        value={globalSearch}
+        onChange={(e) => {
+          setGlobalSearch(e.target.value);
+          if (activeMenu === 'overview' && e.target.value.trim() !== '') {
+            setActiveMenu('users');
+          }
+        }}
+        className={`${inputCls} pl-9`}
+      />
+    </div>
+  );
+
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
+
+  const meta = PAGE_META[activeMenu];
+  const navItems = [
+    { id: 'overview', label: 'Tổng quan', icon: LayoutDashboard },
+    { id: 'users', label: 'Quản lý tài khoản', icon: Users, badge: stats.totalUsers },
+    { id: 'subjects', label: 'Quản lý môn học', icon: BookOpen, badge: stats.totalSubjects }
+  ];
+
+  return (
+    <div className="flex min-h-screen bg-slate-50 text-slate-900">
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      <ConfirmModal
+        open={!!confirmTarget}
+        title={confirmTarget?.kind === 'user' ? 'Xóa tài khoản?' : 'Xóa môn học?'}
+        message={
+          confirmTarget
+            ? `“${confirmTarget.name}” sẽ bị xóa vĩnh viễn khỏi hệ thống. Hành động này không thể hoàn tác.`
+            : ''
+        }
+        confirmLabel="Xóa vĩnh viễn"
+        loading={confirming}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmTarget(null)}
+      />
+
+      {/* OVERLAY MOBILE */}
+      {sidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-30 bg-slate-900/40 animate-fade-in"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* SIDEBAR */}
+      {sidebarOpen && (
+        <aside className="fixed inset-y-0 left-0 z-40 w-64 lg:static lg:z-auto bg-white border-r border-slate-200/80 flex flex-col justify-between p-4 shrink-0">
+          <div>
+            <div className="flex items-center justify-between pb-6 pt-1 px-1">
+              <Link to="/" className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+                  <GraduationCap size={18} />
+                </div>
+                <span className="text-base font-semibold tracking-tight">
+                  Quiz<span className="text-indigo-600">Master</span>
+                </span>
+              </Link>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="lg:hidden p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 cursor-pointer"
+                aria-label="Đóng menu"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-3 pb-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">
+              Quản trị
+            </div>
+
+            <nav className="flex flex-col gap-1">
+              {navItems.map(item => {
+                const Icon = item.icon;
+                const active = activeMenu === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleMenuClick(item.id)}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition cursor-pointer ${
+                      active
+                        ? 'bg-indigo-50 text-indigo-700'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <Icon size={18} />
+                      {item.label}
+                    </span>
+                    {item.badge !== undefined && (
+                      <span
+                        className={`text-xs px-1.5 py-0.5 rounded-md ${
+                          active ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          <div className="border-t border-slate-100 pt-3 flex flex-col gap-1">
+            <Link
+              to="/"
+              className="flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg transition"
+            >
+              <ArrowLeft size={16} />
+              Về trang chủ
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg text-left transition cursor-pointer"
+            >
+              <LogOut size={16} />
+              Đăng xuất
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {/* KHU VỰC NỘI DUNG */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="sticky top-0 z-20 h-16 bg-white/85 backdrop-blur-md px-4 sm:px-6 border-b border-slate-200/80 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 transition cursor-pointer shrink-0"
+              title="Ẩn/hiện menu"
+              aria-label="Ẩn/hiện menu"
+            >
+              <Menu size={18} />
+            </button>
+            <div className="min-w-0">
+              <div className="hidden sm:flex items-center gap-1 text-xs text-slate-500">
+                QuizMaster <ChevronRight size={12} /> {meta.crumb}
+              </div>
+              <h1 className="text-xl font-semibold tracking-tight text-slate-900 truncate leading-7">{meta.title}</h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {renderSearch('hidden md:block w-64')}
+
+            <button
+              onClick={() => fetchData(true)}
+              className="w-9 h-9 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg flex items-center justify-center text-slate-600 transition cursor-pointer"
+              title="Làm mới dữ liệu"
+              aria-label="Làm mới dữ liệu"
+            >
+              <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+            </button>
+
+            <div className="hidden sm:flex items-center gap-2 pl-1 pr-3 h-9 bg-white border border-slate-200 rounded-full">
+              <Avatar name={currentUser.username || 'Admin'} className="w-7 h-7 text-xs" />
+              <span className="text-sm font-medium text-slate-700 max-w-[120px] truncate">
+                {currentUser.username || 'Admin'}
+              </span>
+            </div>
+          </div>
+        </header>
+
+        <main className="p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6">
+          {renderSearch('md:hidden')}
+
+          {/* ===================== TỔNG QUAN ===================== */}
+          {activeMenu === 'overview' && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KpiCard
+                  icon={Users}
+                  label="Tổng tài khoản"
+                  value={stats.totalUsers}
+                  hint={`${stats.active} đang hoạt động`}
+                />
+                <KpiCard
+                  icon={GraduationCap}
+                  label="Thí sinh đăng ký"
+                  value={stats.students}
+                  hint="Sẵn sàng tham gia thi"
+                />
+                <KpiCard
+                  icon={Library}
+                  label="Môn học & Ngân hàng đề"
+                  value={stats.totalSubjects}
+                  hint={`${stats.totalExams} đề thi · ${stats.totalQuestions} câu hỏi`}
+                />
+                <KpiCard
+                  icon={ShieldCheck}
+                  label="Giảng viên & Quản trị"
+                  value={stats.teachers + stats.admins}
+                  hint={`${stats.teachers} giảng viên · ${stats.admins} admin`}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                <div className={`${cardCls} lg:col-span-2 p-5`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                      <TrendingUp size={16} className="text-slate-400" />
+                      Tài khoản đăng ký mới
+                    </div>
+                    <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
+                      {[
+                        { id: '7d', label: '7 ngày' },
+                        { id: '30d', label: '30 ngày' }
+                      ].map(opt => (
+                        <button
+                          key={opt.id}
+                          onClick={() => setChartRange(opt.id)}
+                          className={`px-2.5 py-1 text-xs rounded-md font-medium transition cursor-pointer ${
+                            chartRange === opt.id
+                              ? 'bg-white text-slate-900 shadow-sm'
+                              : 'text-slate-500 hover:text-slate-900'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {renderAreaChart()}
+                </div>
+
+                <div className={`${cardCls} p-5`}>
+                  <div className="text-sm font-medium text-slate-900 mb-4">Cơ cấu người dùng</div>
+                  {renderDonutChart()}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                <div className={`${cardCls} lg:col-span-3 overflow-hidden`}>
+                  <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                    <span className="text-sm font-medium text-slate-900">Tài khoản tham gia gần đây</span>
+                    <button
+                      onClick={() => setActiveMenu('users')}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                    >
+                      Xem tất cả <ChevronRight size={14} />
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[480px] text-left border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-slate-50/70 border-y border-slate-100">
+                          <th className={thCls}>Người dùng</th>
+                          <th className={thCls}>Vai trò</th>
+                          <th className={thCls}>Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {users.slice(0, 5).map(u => (
+                          <tr key={u._id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <Avatar name={u.username} />
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium text-slate-900 truncate">{u.username}</div>
+                                  <div className="text-xs text-slate-500 truncate">{u.email}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4"><RoleBadge role={u.role} /></td>
+                            <td className="py-3 px-4"><StatusBadge active={u.isActive !== false} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {users.length === 0 && (
+                      <EmptyState title="Chưa có tài khoản nào" hint="Tài khoản mới sẽ xuất hiện tại đây." />
+                    )}
+                  </div>
+                </div>
+
+                <div className={`${cardCls} lg:col-span-2 p-5`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-sm font-medium text-slate-900">Môn học</span>
+                    <button
+                      onClick={() => setActiveMenu('subjects')}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                    >
+                      Quản lý <ChevronRight size={14} />
+                    </button>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {subjects.slice(0, 5).map(sub => (
+                      <div key={sub._id} className="flex items-center justify-between gap-3 py-2.5">
+                        <div className="min-w-0 text-sm font-medium text-slate-800 truncate">{sub.name}</div>
+                        <span className="shrink-0 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-xs font-medium">
+                          {sub.subjectCode}
+                        </span>
+                      </div>
+                    ))}
+                    {subjects.length === 0 && (
+                      <EmptyState title="Chưa có môn học" hint="Thêm môn học trong mục Quản lý môn học." />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ===================== QUẢN LÝ TÀI KHOẢN ===================== */}
+          {activeMenu === 'users' && (
+            <div className={`${cardCls} overflow-hidden`}>
+              <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <select
+                    value={roleFilter}
+                    onChange={e => setRoleFilter(e.target.value)}
+                    className={`${inputCls} w-auto`}
+                  >
+                    <option value="all">Tất cả vai trò</option>
+                    <option value="student">Thí sinh</option>
+                    <option value="teacher">Giảng viên</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <select
+                    value={statusFilter}
+                    onChange={e => setStatusFilter(e.target.value)}
+                    className={`${inputCls} w-auto`}
+                  >
+                    <option value="all">Tất cả trạng thái</option>
+                    <option value="active">Đang hoạt động</option>
+                    <option value="locked">Đã khóa</option>
+                  </select>
+                  <span className="text-xs text-slate-500">{filteredUsers.length} tài khoản</span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setShowAddUser(!showAddUser);
+                    setEditingUser(null);
+                  }}
+                  className={showAddUser ? btnGhost : btnPrimary}
+                >
+                  {showAddUser ? <X size={16} /> : <UserPlus size={16} />}
+                  {showAddUser ? 'Đóng biểu mẫu' : 'Cấp tài khoản mới'}
+                </button>
+              </div>
+
+              {showAddUser && (
+                <form
+                  onSubmit={handleCreateUser}
+                  className="mx-4 sm:mx-5 mb-5 p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end animate-fade-in"
+                >
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Họ và tên</label>
+                    <input
+                      type="text"
+                      placeholder="Nguyễn Văn A"
+                      value={newUser.username}
+                      onChange={e => setNewUser({ ...newUser, username: e.target.value })}
+                      required
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Email đăng nhập</label>
+                    <input
+                      type="email"
+                      placeholder="name@example.com"
+                      value={newUser.email}
+                      onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                      required
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={newUser.password}
+                      onChange={e => setNewUser({ ...newUser, password: e.target.value })}
+                      required
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Vai trò</label>
+                    <select
+                      value={newUser.role}
+                      onChange={e => setNewUser({ ...newUser, role: e.target.value })}
+                      className={inputCls}
+                    >
+                      <option value="teacher">Giảng viên</option>
+                      <option value="student">Thí sinh</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <button type="submit" disabled={submitting} className={btnPrimary}>
+                    {submitting && <Loader2 size={14} className="animate-spin" />}
+                    Lưu tài khoản
+                  </button>
+                </form>
+              )}
+
+              {editingUser && (
+                <form
+                  onSubmit={handleUpdateUserSubmit}
+                  className="mx-4 sm:mx-5 mb-5 p-4 bg-indigo-50/50 rounded-xl border border-indigo-200/80 space-y-3 animate-fade-in"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-indigo-700">
+                      Chỉnh sửa tài khoản: {editingUser.username}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingUser(null)}
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Họ và tên</label>
+                      <input
+                        type="text"
+                        value={editingUser.username}
+                        onChange={e => setEditingUser({ ...editingUser, username: e.target.value })}
+                        required
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Email</label>
+                      <input
+                        type="email"
+                        value={editingUser.email}
+                        onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
+                        required
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Đặt lại mật khẩu</label>
+                      <input
+                        type="password"
+                        placeholder="Để trống nếu giữ nguyên"
+                        value={editingUser.password}
+                        onChange={e => setEditingUser({ ...editingUser, password: e.target.value })}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1.5">Vai trò</label>
+                      <select
+                        value={editingUser.role}
+                        disabled={editingUser._id === currentUser.id}
+                        onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                        className={inputCls}
+                      >
+                        <option value="teacher">Giảng viên</option>
+                        <option value="student">Thí sinh</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <button type="submit" disabled={submitting} className={btnPrimary}>
+                      {submitting && <Loader2 size={14} className="animate-spin" />}
+                      Lưu thay đổi
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50/70 border-y border-slate-100">
+                      <th className={thCls}>Người dùng</th>
+                      <th className={thCls}>Phân quyền</th>
+                      <th className={thCls}>Trạng thái</th>
+                      <th className={`${thCls} hidden lg:table-cell`}>Ngày tạo</th>
+                      <th className={`${thCls} text-right`}>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredUsers.map(u => {
+                      const isSelf = u._id === currentUser.id;
+                      const isActive = u.isActive !== false;
+                      return (
+                        <tr key={u._id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar name={u.username} />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-slate-900 truncate">{u.username}</span>
+                                  {isSelf && (
+                                    <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[10px] font-medium">
+                                      Bạn
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-slate-500 truncate">{u.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <select
+                              value={u.role}
+                              disabled={isSelf}
+                              onChange={(e) => handleRoleChange(u, e.target.value)}
+                              className="h-8 px-2.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-50 disabled:text-slate-400 transition"
+                            >
+                              <option value="student">Thí sinh</option>
+                              <option value="teacher">Giảng viên</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          </td>
+                          <td className="py-3.5 px-4"><StatusBadge active={isActive} /></td>
+                          <td className="py-3.5 px-4 text-slate-500 hidden lg:table-cell">{formatDate(u.createdAt)}</td>
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => {
+                                  setShowAddUser(false);
+                                  setEditingUser({
+                                    _id: u._id,
+                                    username: u.username,
+                                    email: u.email,
+                                    role: u.role,
+                                    password: ''
+                                  });
+                                }}
+                                title="Sửa thông tin tài khoản"
+                                aria-label="Sửa thông tin tài khoản"
+                                className={`${iconBtn} hover:bg-indigo-50 hover:text-indigo-600`}
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleToggleStatus(u._id)}
+                                disabled={isSelf}
+                                title={isActive ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
+                                aria-label={isActive ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
+                                className={`${iconBtn} ${
+                                  isActive
+                                    ? 'hover:bg-amber-50 hover:text-amber-600'
+                                    : 'hover:bg-emerald-50 hover:text-emerald-600'
+                                }`}
+                              >
+                                {isActive ? <Lock size={16} /> : <Unlock size={16} />}
+                              </button>
+                              <button
+                                onClick={() => setConfirmTarget({ kind: 'user', id: u._id, name: u.username })}
+                                disabled={isSelf}
+                                title="Xóa tài khoản"
+                                aria-label="Xóa tài khoản"
+                                className={`${iconBtn} hover:bg-rose-50 hover:text-rose-600`}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {filteredUsers.length === 0 && (
+                  <EmptyState title="Không tìm thấy tài khoản" hint="Hãy thử đổi từ khóa hoặc bộ lọc." />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ===================== QUẢN LÝ MÔN HỌC ===================== */}
+          {activeMenu === 'subjects' && (
+            <div className={`${cardCls} overflow-hidden`}>
+              <form
+                onSubmit={handleSubjectSubmit}
+                className="m-4 sm:m-5 p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 flex flex-wrap items-end gap-3"
+              >
+                <div className="w-full sm:w-48">
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Mã môn</label>
+                  <input
+                    type="text"
+                    placeholder="VD: INT1434"
+                    value={subjectForm.subjectCode}
+                    onChange={e => setSubjectForm({ ...subjectForm, subjectCode: e.target.value })}
+                    required
+                    className={inputCls}
+                  />
+                </div>
+                <div className="flex-1 min-w-[220px]">
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Tên môn học</label>
+                  <input
+                    type="text"
+                    placeholder="VD: Lập trình Web"
+                    value={subjectForm.name}
+                    onChange={e => setSubjectForm({ ...subjectForm, name: e.target.value })}
+                    required
+                    className={inputCls}
+                  />
+                </div>
+                <button type="submit" disabled={submitting} className={btnPrimary}>
+                  {submitting ? <Loader2 size={14} className="animate-spin" /> : editingSubjectId ? null : <Plus size={16} />}
+                  {editingSubjectId ? 'Lưu cập nhật' : 'Thêm môn học'}
+                </button>
+                {editingSubjectId && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingSubjectId(null); setSubjectForm({ subjectCode: '', name: '' }); }}
+                    className={btnGhost}
+                  >
+                    Hủy
+                  </button>
+                )}
+              </form>
+
+              <div className="px-4 sm:px-5 pb-3 text-xs text-slate-500">{filteredSubjects.length} môn học</div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50/70 border-y border-slate-100">
+                      <th className={`${thCls} w-40`}>Mã môn</th>
+                      <th className={thCls}>Tên môn học</th>
+                      <th className={`${thCls} text-right w-32`}>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredSubjects.map(sub => (
+                      <tr
+                        key={sub._id}
+                        className={`transition-colors ${
+                          editingSubjectId === sub._id ? 'bg-indigo-50/50' : 'hover:bg-slate-50/70'
+                        }`}
+                      >
+                        <td className="py-3.5 px-4">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs font-medium">
+                            {sub.subjectCode}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-900">{sub.name}</td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => { setEditingSubjectId(sub._id); setSubjectForm({ subjectCode: sub.subjectCode, name: sub.name }); }}
+                              title="Sửa môn học"
+                              aria-label="Sửa môn học"
+                              className={`${iconBtn} hover:bg-indigo-50 hover:text-indigo-600`}
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              onClick={() => setConfirmTarget({ kind: 'subject', id: sub._id, name: sub.name })}
+                              title="Xóa môn học"
+                              aria-label="Xóa môn học"
+                              className={`${iconBtn} hover:bg-rose-50 hover:text-rose-600`}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredSubjects.length === 0 && (
+                  <EmptyState title="Không có môn học nào" hint="Thêm môn học mới bằng biểu mẫu phía trên." />
+                )}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default AdminDashboard;
+</file>
+
+<file path="src/pages/ExamList.jsx">
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axiosClient from '../api/axiosClient';
+
+const ExamList = () => {
+  const [exams, setExams] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [examCode, setExamCode] = useState('');
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchExams = async () => {
+      try {
+        const data = await axiosClient.get('/exams');
+        setExams(Array.isArray(data) ? data : []);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchExams();
+  }, []);
+
+  const handleJoinByCode = (e) => {
+    e.preventDefault();
+    const code = examCode.trim().toUpperCase();
+    if (!code) {
+      setError('Vui lòng nhập mã đề thi!');
+      return;
+    }
+    setError('');
+    navigate(`/exam-room/${code}`);
+  };
+
+  return (
+    <div style={{ maxWidth: '900px', margin: '30px auto', padding: '20px' }}>
+      <h2 style={{ marginBottom: '20px', fontSize: '22px', fontWeight: 'bold' }}>Danh sách bài thi</h2>
+
+      <form
+        onSubmit={handleJoinByCode}
+        style={{
+          display: 'flex',
+          gap: '10px',
+          marginBottom: '15px',
+          padding: '20px',
+          border: '1px solid #ddd',
+          borderRadius: '8px',
+          background: '#fff',
+        }}
+      >
+        <input
+          type="text"
+          placeholder="Nhập mã đề thi (VD: JAVA01)..."
+          value={examCode}
+          onChange={(e) => setExamCode(e.target.value)}
+          style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #ccc' }}
+        />
+        <button
+          type="submit"
+          style={{
+            padding: '10px 20px',
+            background: '#4f46e5',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+          }}
+        >
+          Vào phòng thi
+        </button>
+      </form>
+
+      {error && (
+        <p style={{ color: '#dc3545', fontWeight: 'bold', marginBottom: '20px' }}>{error}</p>
+      )}
+
+      {loading ? (
+        <p>Đang tải danh sách kỳ thi...</p>
+      ) : exams.length === 0 ? (
+        <p>Hiện chưa có kỳ thi nào trong hệ thống.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+          {exams.map((exam) => (
+            <div
+              key={exam._id}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '20px',
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                background: '#fff',
+              }}
+            >
+              <div>
+                <h4 style={{ margin: '0 0 8px 0', fontWeight: '600' }}>{exam.title}</h4>
+                <p style={{ margin: 0, color: '#555', fontSize: '14px' }}>
+                  Mã đề: <strong>{exam.examCode}</strong> | Môn:{' '}
+                  <strong>{exam.subject?.name || '—'}</strong> | Thời gian:{' '}
+                  <strong>{exam.duration} phút</strong> | Trạng thái:{' '}
+                  <span
+                    style={{
+                      color: exam.status === 'Đang mở' ? '#198754' : '#dc3545',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    {exam.status}
+                  </span>
+                </p>
+              </div>
+
+              <button
+                disabled={exam.status !== 'Đang mở'}
+                onClick={() => navigate(`/exam-room/${exam.examCode}`)}
+                style={{
+                  padding: '10px 16px',
+                  background: exam.status === 'Đang mở' ? '#198754' : '#ccc',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: exam.status === 'Đang mở' ? 'pointer' : 'not-allowed',
+                  fontWeight: 'bold',
+                }}
+              >
+                {exam.status === 'Đang mở' ? 'Vào thi ngay' : exam.status}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ExamList;
+</file>
+
+<file path="src/pages/ExamRoom.jsx">
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import axiosClient from '../api/axiosClient';
+
+const shuffleArray = (array) => {
+  const newArr = [...array];
+  for (let i = newArr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+  }
+  return newArr;
+};
+
+const ExamRoom = () => {
+  const { examCode } = useParams();
+  const navigate = useNavigate();
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [attemptId, setAttemptId] = useState(null);
+  const [examInfo, setExamInfo] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [flagged, setFlagged] = useState({});
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [result, setResult] = useState(null);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+
+  // 1. Gọi API vào phòng thi & tính đồng hồ theo giờ Server
+  useEffect(() => {
+    const initExam = async () => {
+      try {
+        const data = await axiosClient.post('/exams/join', { examCode });
+        setAttemptId(data.attemptId);
+        setExamInfo(data.exam);
+
+        // 
+        const examKey = `de_thi_${data.attemptId}`;
+        const draftKey = `nhap_${data.attemptId}`;
+
+        const savedOrder = localStorage.getItem(examKey);
+        if (savedOrder) {
+          setQuestions(JSON.parse(savedOrder));
+        } else {
+          const shuffled = shuffleArray(data.questions).map((q) => ({
+            ...q,
+            options: shuffleArray(q.options),
+          }));
+          localStorage.setItem(examKey, JSON.stringify(shuffled));
+          setQuestions(shuffled);
+        }
+
+        const savedAnswers = localStorage.getItem(draftKey);
+        if (savedAnswers) setAnswers(JSON.parse(savedAnswers));
+
+        // 
+        const startMs = new Date(data.startTime).getTime();
+        const serverMs = new Date(data.serverTime).getTime();
+        const endByDuration = startMs + data.exam.duration * 60 * 1000;
+        const endByClose = new Date(data.exam.closeTime).getTime();
+        const remainingSec = Math.max(0, Math.floor((Math.min(endByDuration, endByClose) - serverMs) / 1000));
+        setTimeLeft(remainingSec);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initExam();
+  }, [examCode]);
+
+  // 2. Lưu nháp vào localStorage mỗi khi chọn đáp án
+  useEffect(() => {
+    if (attemptId && !isSubmitted) {
+      localStorage.setItem(`nhap_${attemptId}`, JSON.stringify(answers));
+    }
+  }, [answers, attemptId, isSubmitted]);
+
+  // 3. Gửi bài lên Server chấm điểm
+  const handleSubmit = useCallback(
+    async (isAuto = false) => {
+      if (!attemptId || isSubmitted) return;
+      if (!isAuto) {
+        const ok = window.confirm('Bạn có chắc chắn muốn nộp bài không?');
+        if (!ok) return;
+      }
+
+      try {
+        const formattedAnswers = Object.entries(answers).map(([questionId, selectedOptions]) => ({
+          questionId,
+          selectedOptions,
+        }));
+
+        const res = await axiosClient.post('/exams/submit', {
+          attemptId,
+          answers: formattedAnswers,
+        });
+
+        setResult(res);
+        setIsSubmitted(true);
+        localStorage.removeItem(`nhap_${attemptId}`);
+        localStorage.removeItem(`de_thi_${attemptId}`);
+      } catch (err) {
+        alert(err.message);
+      }
+    },
+    [attemptId, answers, isSubmitted]
+  );
+
+  // 4. Đồng hồ đếm ngược & tự động nộp khi hết giờ
+  useEffect(() => {
+    if (loading || error || isSubmitted || !attemptId) return;
+    if (timeLeft <= 0) {
+      handleSubmit(true);
+      return;
+    }
+    const timerId = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
+    return () => clearInterval(timerId);
+  }, [timeLeft, loading, error, isSubmitted, attemptId, handleSubmit]);
+
+  // 5. Cảnh báo rời tab thi
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && !isSubmitted && attemptId) {
+        setTabSwitchCount((prev) => {
+          const newCount = prev + 1;
+          alert(`⚠️ CẢNH BÁO: Bạn vừa rời khỏi trang thi! (Số lần vi phạm: ${newCount})`);
+          return newCount;
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isSubmitted, attemptId]);
+
+  const toggleFlag = (questionId) => {
+    setFlagged((prev) => ({ ...prev, [questionId]: !prev[questionId] }));
+  };
+
+  const handleSelectOption = (question, option) => {
+    setAnswers((prev) => {
+      const current = prev[question._id] || [];
+      if (question.isMultipleChoice) {
+        const exists = current.includes(option);
+        const updated = exists ? current.filter((o) => o !== option) : [...current, option];
+        return { ...prev, [question._id]: updated };
+      }
+      return { ...prev, [question._id]: [option] };
+    });
+  };
+
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center' }}>Đang tải đề thi...</div>;
+
+  if (error) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', maxWidth: '500px', margin: '40px auto', background: '#fff', borderRadius: '8px', border: '1px solid #ddd' }}>
+        <h3 style={{ color: '#dc3545', marginBottom: '12px' }}>Không thể vào phòng thi</h3>
+        <p style={{ marginBottom: '20px' }}>{error}</p>
+        <button onClick={() => navigate('/exams')} style={{ padding: '10px 20px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+          Quay lại danh sách
+        </button>
+      </div>
+    );
+  }
+
+  if (isSubmitted && result) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', maxWidth: '600px', margin: '40px auto', background: '#fff', border: '1px solid #ddd', borderRadius: '8px' }}>
+        <h2 style={{ color: '#198754', fontSize: '24px', fontWeight: 'bold' }}>Nộp bài thành công!</h2>
+        <p style={{ marginTop: '12px', fontSize: '18px' }}>
+          Điểm số: <strong style={{ color: '#4f46e5' }}>{result.score} / 10</strong>
+        </p>
+        <p style={{ marginTop: '8px' }}>
+          Số câu đúng: <strong>{result.correctCount} / {result.totalQuestions}</strong>
+        </p>
+        {tabSwitchCount > 0 && (
+          <p style={{ marginTop: '8px', color: '#dc3545', fontSize: '14px' }}>
+            Số lần chuyển tab: {tabSwitchCount}
+          </p>
+        )}
+        <button
+          onClick={() => navigate('/exams')}
+          style={{ marginTop: '24px', padding: '10px 20px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+        >
+          Về danh sách bài thi
+        </button>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions[currentIndex];
+  if (!currentQuestion) return null;
+
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  const selectedList = answers[currentQuestion._id] || [];
+
+  return (
+    <div style={{ display: 'flex', padding: '20px', gap: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ flex: 3, border: '1px solid #ddd', padding: '20px', borderRadius: '8px', background: '#fff' }}>
+        <div style={{ marginBottom: '12px', color: '#666', fontSize: '14px' }}>
+          {examInfo?.title} ({examInfo?.examCode})
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontWeight: 'bold', fontSize: '18px' }}>
+            Câu {currentIndex + 1}: {currentQuestion.content}
+            {currentQuestion.isMultipleChoice && (
+              <span style={{ fontSize: '13px', color: '#4f46e5', marginLeft: '8px' }}>(Chọn nhiều đáp án)</span>
+            )}
+          </h3>
+          <button
+            onClick={() => toggleFlag(currentQuestion._id)}
+            style={{
+              padding: '6px 12px',
+              cursor: 'pointer',
+              borderRadius: '6px',
+              border: '1px solid #ffc107',
+              background: flagged[currentQuestion._id] ? '#ffc107' : '#fff',
+              fontWeight: 'bold',
+            }}
+          >
+            🔖
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
+          {currentQuestion.options.map((opt, idx) => {
+            const isSelected = selectedList.includes(opt);
+            return (
+              <label
+                key={idx}
+                style={{
+                  padding: '12px',
+                  border: isSelected ? '2px solid #4f46e5' : '1px solid #ddd',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  background: isSelected ? '#eef2ff' : 'white',
+                }}
+              >
+                <input
+                  type={currentQuestion.isMultipleChoice ? 'checkbox' : 'radio'}
+                  name={`question-${currentQuestion._id}`}
+                  checked={isSelected}
+                  onChange={() => handleSelectOption(currentQuestion, opt)}
+                  style={{ marginRight: '10px' }}
+                />
+                {opt}
+              </label>
+            );
+          })}
+        </div>
+
+        <div style={{ marginTop: '30px', display: 'flex', justifyContent: 'space-between' }}>
+          <button
+            disabled={currentIndex === 0}
+            onClick={() => setCurrentIndex((prev) => prev - 1)}
+            style={{ padding: '8px 16px', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '6px' }}
+          >
+            &laquo; Câu trước
+          </button>
+          <button
+            disabled={currentIndex === questions.length - 1}
+            onClick={() => setCurrentIndex((prev) => prev + 1)}
+            style={{ padding: '8px 16px', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '6px' }}
+          >
+            Câu sau &raquo;
+          </button>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, border: '1px solid #ddd', padding: '20px', borderRadius: '8px', textAlign: 'center', background: '#fff' }}>
+        <h2 style={{ color: '#dc3545', margin: '0 0 20px 0', fontSize: '26px', fontWeight: 'bold' }}>
+          {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
+        </h2>
+        <hr />
+        <h4 style={{ margin: '15px 0' }}>Bảng điều hướng</h4>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
+          {questions.map((q, index) => {
+            const hasAnswered = (answers[q._id] || []).length > 0;
+            const isCurrent = currentIndex === index;
+            const isFlagged = flagged[q._id];
+            return (
+              <button
+                key={q._id}
+                onClick={() => setCurrentIndex(index)}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  border: isCurrent ? '2px solid #000' : '1px solid #ccc',
+                  background: isFlagged ? '#ffc107' : hasAnswered ? '#198754' : '#fff',
+                  color: isFlagged ? '#000' : hasAnswered ? '#fff' : '#000',
+                }}
+              >
+                {index + 1}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => handleSubmit(false)}
+          style={{ marginTop: '30px', width: '100%', padding: '12px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '16px' }}
+        >
+          NỘP BÀI
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default ExamRoom;
+</file>
+
+<file path="src/pages/Home.jsx">
+import React from 'react';
+import { Link } from 'react-router-dom';
+import {
+  ArrowRight,
+  ClipboardCheck,
+  Timer,
+  BarChart3,
+  ShieldCheck,
+  Library,
+  KeyRound,
+  FileCheck2,
+} from 'lucide-react';
+
+const FEATURES = [
+  {
+    icon: Library,
+    title: 'Ngân hàng câu hỏi',
+    desc: 'Giảng viên soạn và phân loại câu hỏi theo môn học và độ khó, dùng lại cho nhiều đề thi.',
+  },
+  {
+    icon: Timer,
+    title: 'Thi có giới hạn thời gian',
+    desc: 'Mỗi lượt thi có thời lượng, thời điểm mở và đóng đề rõ ràng, đảm bảo công bằng cho mọi thí sinh.',
+  },
+  {
+    icon: BarChart3,
+    title: 'Chấm điểm tự động',
+    desc: 'Hệ thống tính điểm ngay khi nộp bài, hỗ trợ câu hỏi một hoặc nhiều đáp án đúng.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Phân quyền rõ ràng',
+    desc: 'Ba vai trò quản trị viên, giảng viên và thí sinh, mỗi vai trò chỉ thấy đúng phần việc của mình.',
+  },
+];
+
+const STEPS = [
+  { icon: KeyRound, title: 'Đăng nhập', desc: 'Dùng tài khoản được cấp hoặc tự đăng ký tài khoản thí sinh.' },
+  { icon: ClipboardCheck, title: 'Vào phòng thi', desc: 'Nhập mã đề do giảng viên cung cấp để bắt đầu làm bài.' },
+  { icon: FileCheck2, title: 'Nộp bài & xem điểm', desc: 'Kết quả được tổng hợp ngay sau khi bạn hoàn thành.' },
+];
+
+const Home = () => {
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const destination = user ? { admin: '/admin', teacher: '/teacher', student: '/exams' }[user.role] || '/' : null;
+
+  return (
+    <div>
+      {/* HERO */}
+      <section className="relative overflow-hidden bg-white border-b border-slate-200/80">
+        <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(99,102,241,0.10),transparent)]" />
+        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-100 bg-indigo-50/70 text-xs font-medium text-indigo-700">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            Hệ thống thi trắc nghiệm trực tuyến
+          </span>
+
+          <h1 className="mt-6 text-3xl sm:text-5xl font-semibold tracking-tight text-slate-900 leading-tight">
+            Tổ chức thi trắc nghiệm
+            <br className="hidden sm:block" /> chính xác, minh bạch và nhanh chóng
+          </h1>
+
+          <p className="mt-5 text-base sm:text-lg text-slate-500 max-w-2xl mx-auto leading-relaxed">
+            QuizMaster giúp giảng viên xây dựng đề thi từ ngân hàng câu hỏi và giúp thí sinh làm bài, nhận kết quả
+            ngay trên một nền tảng duy nhất.
+          </p>
+
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+            {user ? (
+              <Link
+                to={destination}
+                className="inline-flex items-center gap-2 h-11 px-6 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm shadow-indigo-600/20 transition"
+              >
+                Vào khu vực của tôi
+                <ArrowRight size={16} />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="inline-flex items-center gap-2 h-11 px-6 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm shadow-indigo-600/20 transition"
+                >
+                  Đăng nhập để bắt đầu
+                  <ArrowRight size={16} />
+                </Link>
+                <Link
+                  to="/register"
+                  className="inline-flex items-center h-11 px-6 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition"
+                >
+                  Tạo tài khoản thí sinh
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* TÍNH NĂNG */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
+        <div className="max-w-2xl">
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
+            Mọi thứ cần thiết cho một kỳ thi
+          </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Từ soạn câu hỏi, tổ chức đề thi đến chấm điểm, tất cả nằm trong một quy trình thống nhất.
+          </p>
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {FEATURES.map((f) => {
+            const Icon = f.icon;
+            return (
+              <div
+                key={f.title}
+                className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-sm hover:border-indigo-200 hover:shadow-md transition"
+              >
+                <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Icon size={20} />
+                </div>
+                <h3 className="mt-4 text-sm font-semibold text-slate-900">{f.title}</h3>
+                <p className="mt-1.5 text-sm text-slate-500 leading-relaxed">{f.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* QUY TRÌNH */}
+      <section className="bg-white border-t border-slate-200/80">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-16">
+          <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">Bắt đầu chỉ với 3 bước</h2>
+
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+            {STEPS.map((s, idx) => {
+              const Icon = s.icon;
+              return (
+                <div key={s.title} className="flex items-start gap-4">
+                  <div className="relative shrink-0">
+                    <div className="w-11 h-11 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 flex items-center justify-center">
+                      <Icon size={20} />
+                    </div>
+                    <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] font-semibold flex items-center justify-center">
+                      {idx + 1}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900">{s.title}</h3>
+                    <p className="mt-1 text-sm text-slate-500 leading-relaxed">{s.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default Home;
+</file>
+
+<file path="src/pages/Login.jsx">
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, GraduationCap } from 'lucide-react';
+import axiosClient from '../api/axiosClient';
+
+const Login = () => {
+  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const data = await axiosClient.post('/auth/login', formData);
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+
+      if (data.user.role === 'admin') {
+        navigate('/admin');
+      } else if (data.user.role === 'teacher') {
+        navigate('/teacher');
+      } else {
+        navigate('/');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputCls =
+    'w-full h-11 pl-10 pr-3.5 text-sm rounded-xl border border-slate-200 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition';
+
+  return (
+    <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-7 sm:p-8">
+          <div className="flex flex-col items-center text-center">
+            <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm shadow-indigo-600/20">
+              <GraduationCap size={22} />
+            </div>
+            <h2 className="mt-4 text-xl font-semibold tracking-tight text-slate-900">Đăng nhập hệ thống</h2>
+            <p className="mt-1 text-sm text-slate-500">Nhập thông tin tài khoản QuizMaster của bạn</p>
+          </div>
+
+          {error && (
+            <div
+              role="alert"
+              className="mt-6 flex items-start gap-2.5 p-3 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700 text-sm"
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Email
+              </label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="name@example.com"
+                  autoComplete="email"
+                  required
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Mật khẩu
+              </label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                  className={`${inputCls} pr-11`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-11 inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed text-white font-medium text-sm rounded-xl shadow-sm shadow-indigo-600/20 transition cursor-pointer mt-2"
+            >
+              {loading && <Loader2 size={16} className="animate-spin" />}
+              {loading ? 'Đang xác thực...' : 'Đăng nhập'}
+            </button>
+          </form>
+        </div>
+
+        <p className="text-center text-sm text-slate-500 mt-6">
+          Chưa có tài khoản?{' '}
+          <Link to="/register" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline">
+            Đăng ký ngay
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default Login;
+</file>
+
+<file path="src/pages/Register.jsx">
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { User, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2, UserPlus } from 'lucide-react';
+import axiosClient from '../api/axiosClient';
+
+const Register = () => {
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: ''
+  });
+
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setMessage('');
+    setError('');
+
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Định dạng email không hợp lệ (ví dụ: example@gmail.com)!');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await axiosClient.post('/auth/register', formData);
+
+      setMessage('Đăng ký tài khoản thành công! Bạn có thể chuyển sang trang đăng nhập.');
+      setFormData({ username: '', email: '', password: '' });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputCls =
+    'w-full h-11 pl-10 pr-3.5 text-sm rounded-xl border border-slate-200 bg-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition';
+
+  return (
+    <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-7 sm:p-8">
+          <div className="flex flex-col items-center text-center">
+            <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm shadow-indigo-600/20">
+              <UserPlus size={22} />
+            </div>
+            <h2 className="mt-4 text-xl font-semibold tracking-tight text-slate-900">Đăng ký tài khoản</h2>
+            <p className="mt-1 text-sm text-slate-500">Tạo tài khoản mới để tham gia thi trắc nghiệm</p>
+          </div>
+
+          {error && (
+            <div
+              role="alert"
+              className="mt-6 flex items-start gap-2.5 p-3 rounded-lg bg-rose-50 border border-rose-200/80 text-rose-700 text-sm"
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {message && (
+            <div
+              role="status"
+              className="mt-6 flex items-start gap-2.5 p-3 rounded-lg bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-sm"
+            >
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+              <span>
+                {message}{' '}
+                <Link to="/login" className="font-semibold underline underline-offset-2">
+                  Đăng nhập
+                </Link>
+              </span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Họ và tên
+              </label>
+              <div className="relative">
+                <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="username"
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  placeholder="Nhập họ tên của bạn"
+                  autoComplete="name"
+                  required
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Email
+              </label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="email"
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="name@example.com"
+                  autoComplete="email"
+                  required
+                  className={inputCls}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1.5">
+                Mật khẩu
+              </label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Nhập mật khẩu"
+                  autoComplete="new-password"
+                  required
+                  className={`${inputCls} pr-11`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-11 inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed text-white font-medium text-sm rounded-xl shadow-sm shadow-indigo-600/20 transition cursor-pointer mt-2"
+            >
+              {loading && <Loader2 size={16} className="animate-spin" />}
+              {loading ? 'Đang tạo tài khoản...' : 'Đăng ký ngay'}
+            </button>
+          </form>
+        </div>
+
+        <p className="text-center text-sm text-slate-500 mt-6">
+          Đã có tài khoản?{' '}
+          <Link to="/login" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline">
+            Đăng nhập
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default Register;
+</file>
+
+<file path="src/App.js">
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Layout from './components/Layout';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ExamRoom from './pages/ExamRoom';
+import ExamList from './pages/ExamList';
+import AdminDashboard from './pages/AdminDashboard';
+import ProtectedRoute from './components/ProtectedRoute';
+
+const PublicOnlyRoute = ({ children }) => {
+  const token = localStorage.getItem('token');
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem('user'));
+  } catch {
+    user = null;
+  }
+
+  if (token && user) {
+    if (user.role === 'admin') return <Navigate to="/admin" replace />;
+    if (user.role === 'teacher') return <Navigate to="/teacher" replace />;
+    return <Navigate to="/" replace />;
+  }
+  return children;
+};
+
+const WorkspacePlaceholder = ({ title, description }) => (
+  <div className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center text-center px-4">
+    <span className="px-3 py-1 rounded-full border border-indigo-100 bg-indigo-50/70 text-xs font-medium text-indigo-700">
+      Phân hệ đang tích hợp
+    </span>
+    <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+    <p className="mt-2 text-sm text-slate-500 max-w-md leading-relaxed">{description}</p>
+  </div>
+);
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Home />} />
+          
+
+          <Route
+            path="login"
+            element={
+              <PublicOnlyRoute>
+                <Login />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="register"
+            element={
+              <PublicOnlyRoute>
+                <Register />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="admin"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="teacher"
+            element={
+              <ProtectedRoute allowedRoles={['teacher', 'admin']}>
+                <WorkspacePlaceholder
+                  title="Ngân hàng đề thi & Câu hỏi"
+                  description="Khu vực dành cho giảng viên biên soạn câu hỏi trắc nghiệm và tổ chức ca thi."
+                />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="exams"
+            element={
+              <ProtectedRoute allowedRoles={['student', 'admin']}>
+                <ExamList />
+              </ProtectedRoute>
+            }
+          />
+           <Route
+            path="exam-room/:examCode"
+            element={
+              <ProtectedRoute allowedRoles={['student', 'admin']}>
+                <ExamRoom />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+</file>
+
+<file path="src/index.css">
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  body {
+    margin: 0;
+    @apply bg-slate-50 text-slate-900 antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: rgba(99, 102, 241, 0.2);
+  }
+
+  /* Custom scrollbar (Chrome, Edge, Safari) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  button:focus-visible,
+  a:focus-visible {
+    @apply outline-none ring-2 ring-indigo-500/40 ring-offset-1;
+  }
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+</file>
+
+<file path="src/index.js">
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import reportWebVitals from './reportWebVitals';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
+</file>
+
+<file path="src/reportWebVitals.js">
+const reportWebVitals = onPerfEntry => {
+  if (onPerfEntry && onPerfEntry instanceof Function) {
+    import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+      getCLS(onPerfEntry);
+      getFID(onPerfEntry);
+      getFCP(onPerfEntry);
+      getLCP(onPerfEntry);
+      getTTFB(onPerfEntry);
+    });
+  }
+};
+
+export default reportWebVitals;
+</file>
+
+<file path="src/setupTests.js">
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom';
+</file>
+
+<file path=".gitignore">
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+node_modules/
+</file>
+
+<file path="package.json">
+{
+  "name": "cuoiky",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.21.1",
+    "lucide-react": "^1.77.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^6.30.6",
+    "react-scripts": "5.0.1",
+    "web-vitals": "^2.1.4"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.7.0",
+    "postcss": "^8.5.33",
+    "tailwindcss": "^3.4.19"
+  }
+}
+</file>
+
+<file path="postcss.config.js">
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+</file>
+
+<file path="README.md">
+# Getting Started with Create React App
+
+This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+
+## Available Scripts
+
+In the project directory, you can run:
+
+### `npm start`
+
+Runs the app in the development mode.\
+Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+
+The page will reload when you make changes.\
+You may also see any lint errors in the console.
+
+### `npm test`
+
+Launches the test runner in the interactive watch mode.\
+See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+
+### `npm run build`
+
+Builds the app for production to the `build` folder.\
+It correctly bundles React in production mode and optimizes the build for the best performance.
+
+The build is minified and the filenames include the hashes.\
+Your app is ready to be deployed!
+
+See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+
+### `npm run eject`
+
+**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+
+If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+
+Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+
+You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+
+## Learn More
+
+You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+
+To learn React, check out the [React documentation](https://reactjs.org/).
+
+### Code Splitting
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+
+### Analyzing the Bundle Size
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+
+### Making a Progressive Web App
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+
+### Advanced Configuration
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+
+### Deployment
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+
+### `npm run build` fails to minify
+
+This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+</file>
+
+<file path="tailwind.config.js">
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./src/**/*.{js,jsx,ts,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: [
+          'Inter',
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          'Segoe UI',
+          'Roboto',
+          'Helvetica Neue',
+          'Arial',
+          'sans-serif',
+        ],
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.15s ease-out',
+        'slide-up': 'slideUp 0.2s ease-out',
+      },
+    },
+  },
+  plugins: [],
+}
+</file>
+
+</files>

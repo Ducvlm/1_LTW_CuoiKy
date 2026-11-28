@@ -3,6 +3,7 @@ const router = express.Router();
 const { verifyToken, verifyRole } = require('../middleware/authMiddleware');
 const {
     getDashboardStats,
+    getExamAnalytics,
     getAllUsers,
     createUser,
     updateUser,
@@ -13,7 +14,9 @@ const {
     updateSubject,
     deleteSubject
 } = require('../controllers/adminController');
-
+// Route thống kê tổng quan và toán tử MongoDB
+router.get('/stats', getDashboardStats);
+router.get('/exam-analytics', getExamAnalytics);
 // Áp dụng bảo vệ: Bắt buộc đăng nhập & phải có quyền 'admin' cho tất cả route bên dưới
 router.use(verifyToken, verifyRole(['admin']));
 

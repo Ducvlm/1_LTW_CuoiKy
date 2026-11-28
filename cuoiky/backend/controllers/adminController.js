@@ -1,8 +1,132 @@
+const ExamAttempt = require('../models/ExamAttempts');
 const User = require('../models/User');
 const Subject = require('../models/Subject');
 const Exam = require('../models/Exam');
 const Question = require('../models/Question');
 const bcrypt = require('bcryptjs');
+const getExamAnalytics = async (req, res) => {
+    try {
+        const [overviewResult, bySubject, byDate] = await Promise.all([
+            // Pipeline 1: Tổng quan toàn hệ thống ($match -> $group -> $project)
+            ExamAttempt.aggregate([
+                { $match: { status: 'submitted' } },
+                {
+                    $group: {
+                        _id: null,
+                        totalSubmissions: { $sum: 1 },
+                        avgScore: { $avg: '$score' },
+                        passedCount: {
+                            $sum: { $cond: [{ $gte: ['$score', 5] }, 1, 0] }
+                        }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        totalSubmissions: 1,
+                        avgScore: { $round: [{ $ifNull: ['$avgScore', 0] }, 2] },
+                        passRate: {
+                            $cond: [
+                                { $gt: ['$totalSubmissions', 0] },
+                                {
+                                    $round: [
+                                        { $multiply: [{ $divide: ['$passedCount', '$totalSubmissions'] }, 100] },
+                                        1
+                                    ]
+                                },
+                                0
+                            ]
+                        }
+                    }
+                }
+            ]),
+
+            // Pipeline 2: Thống kê theo từng môn học ($match -> $lookup -> $unwind -> $group -> $project -> $sort)
+            ExamAttempt.aggregate([
+                { $match: { status: 'submitted' } },
+                {
+                    $lookup: {
+                        from: 'exams',
+                        localField: 'examId',
+                        foreignField: '_id',
+                        as: 'examInfo'
+                    }
+                },
+                { $unwind: '$examInfo' },
+                {
+                    $lookup: {
+                        from: 'subjects',
+                        localField: 'examInfo.subjectId',
+                        foreignField: '_id',
+                        as: 'subjectInfo'
+                    }
+                },
+                { $unwind: '$subjectInfo' },
+                {
+                    $group: {
+                        _id: '$subjectInfo._id',
+                        subjectCode: { $first: '$subjectInfo.subjectCode' },
+                        subjectName: { $first: '$subjectInfo.name' },
+                        totalAttempts: { $sum: 1 },
+                        avgScore: { $avg: '$score' },
+                        maxScore: { $max: '$score' },
+                        passedCount: {
+                            $sum: { $cond: [{ $gte: ['$score', 5] }, 1, 0] }
+                        }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        subjectId: '$_id',
+                        subjectCode: 1,
+                        subjectName: 1,
+                        totalAttempts: 1,
+                        avgScore: { $round: [{ $ifNull: ['$avgScore', 0] }, 2] },
+                        maxScore: { $ifNull: ['$maxScore', 0] },
+                        passRate: {
+                            $round: [{ $multiply: [{ $divide: ['$passedCount', '$totalAttempts'] }, 100] }, 1]
+                        }
+                    }
+                },
+                { $sort: { totalAttempts: -1, avgScore: -1 } }
+            ]),
+
+            // Pipeline 3: Thống kê lượt nộp bài & điểm TB theo ngày ($match -> $group -> $project -> $sort -> $limit)
+            ExamAttempt.aggregate([
+                { $match: { status: 'submitted', submittedAt: { $ne: null } } },
+                {
+                    $group: {
+                        _id: {
+                            $dateToString: { format: '%Y-%m-%d', date: '$submittedAt', timezone: '+07:00' }
+                        },
+                        totalAttempts: { $sum: 1 },
+                        avgScore: { $avg: '$score' }
+                    }
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        date: '$_id',
+                        totalAttempts: 1,
+                        avgScore: { $round: [{ $ifNull: ['$avgScore', 0] }, 2] }
+                    }
+                },
+                { $sort: { date: -1 } },
+                { $limit: 7 }
+            ])
+        ]);
+
+        res.status(200).json({
+            overview: overviewResult[0] || { totalSubmissions: 0, avgScore: 0, passRate: 0 },
+            bySubject,
+            byDate
+        });
+    } catch (error) {
+        console.error('Lỗi thống kê kết quả thi:', error);
+        res.status(500).json({ message: 'Lỗi lấy thống kê kết quả thi!' });
+    }
+};
 
 // ================= 1. THỐNG KÊ DASHBOARD =================
 const getDashboardStats = async (req, res) => {
@@ -269,6 +393,7 @@ const deleteSubject = async (req, res) => {
 
 module.exports = {
     getDashboardStats,
+    getExamAnalytics,
     getAllUsers,
     createUser,
     updateUser,

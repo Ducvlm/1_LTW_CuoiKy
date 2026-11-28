@@ -175,6 +175,11 @@ const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [serverStats, setServerStats] = useState({ totalExams: 0, totalQuestions: 0 });
+  const [analytics, setAnalytics] = useState({
+    overview: { totalSubmissions: 0, avgScore: 0, passRate: 0 },
+    bySubject: [],
+    byDate: [],
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -201,10 +206,11 @@ const AdminDashboard = () => {
   else setLoading(true);
 
   try {
-    const [usersData, subjectsData, statsData] = await Promise.all([
+    const [usersData, subjectsData, statsData, analyticsData] = await Promise.all([
       axiosClient.get('/admin/users'),
       axiosClient.get('/admin/subjects'),
       axiosClient.get('/admin/stats'),
+      axiosClient.get('/admin/exam-analytics'),
     ]);
 
     setUsers(Array.isArray(usersData) ? usersData : []);
@@ -214,6 +220,9 @@ const AdminDashboard = () => {
         totalExams: statsData.totalExams || 0,
         totalQuestions: statsData.totalQuestions || 0,
       });
+    }
+    if (analyticsData){
+      setAnalytics(analyticsData);
     }
   } catch (err) {
     console.error('Lỗi tải dữ liệu:', err);
@@ -863,6 +872,82 @@ useEffect(() => {
                     ))}
                     {subjects.length === 0 && (
                       <EmptyState title="Chưa có môn học" hint="Thêm môn học trong mục Quản lý môn học." />
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* THỐNG KÊ KẾT QUẢ THI (AGGREGATION PIPELINE) */}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                <div className={`${cardCls} lg:col-span-3 overflow-hidden`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-5 pb-3">
+                    <span className="text-sm font-medium text-slate-900">Thống kê kết quả theo môn học</span>
+                    <span className="text-xs text-slate-500">
+                      Tổng {analytics.overview.totalSubmissions} bài nộp · Điểm TB:{' '}
+                      <strong className="text-indigo-600">{analytics.overview.avgScore}/10</strong> · Đạt:{' '}
+                      <strong className="text-emerald-600">{analytics.overview.passRate}%</strong>
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[480px] text-left border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-slate-50/70 border-y border-slate-100">
+                          <th className={thCls}>Môn học</th>
+                          <th className={`${thCls} text-center`}>Lượt thi</th>
+                          <th className={`${thCls} text-center`}>Điểm TB</th>
+                          <th className={`${thCls} text-center`}>Cao nhất</th>
+                          <th className={`${thCls} text-right`}>Tỷ lệ đạt</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {analytics.bySubject.map((item) => (
+                          <tr key={item.subjectId} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-slate-900">{item.subjectName}</div>
+                              <div className="text-xs text-slate-500">{item.subjectCode}</div>
+                            </td>
+                            <td className="py-3 px-4 text-center font-medium text-slate-700">{item.totalAttempts}</td>
+                            <td className="py-3 px-4 text-center font-semibold text-indigo-600">{item.avgScore}</td>
+                            <td className="py-3 px-4 text-center text-slate-600">{item.maxScore}</td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                {item.passRate}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {analytics.bySubject.length === 0 && (
+                      <EmptyState title="Chưa có dữ liệu bài thi" hint="Thống kê sẽ hiển thị khi có thí sinh nộp bài." />
+                    )}
+                  </div>
+                </div>
+
+                <div className={`${cardCls} lg:col-span-2 overflow-hidden`}>
+                  <div className="px-5 pt-5 pb-3">
+                    <span className="text-sm font-medium text-slate-900">Lượt nộp bài theo ngày</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-slate-50/70 border-y border-slate-100">
+                          <th className={thCls}>Ngày</th>
+                          <th className={`${thCls} text-center`}>Số lượt thi</th>
+                          <th className={`${thCls} text-right`}>Điểm TB</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {analytics.byDate.map((d) => (
+                          <tr key={d.date} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-3 px-4 font-medium text-slate-800">{formatDate(d.date)}</td>
+                            <td className="py-3 px-4 text-center text-slate-600">{d.totalAttempts}</td>
+                            <td className="py-3 px-4 text-right font-semibold text-indigo-600">{d.avgScore}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {analytics.byDate.length === 0 && (
+                      <EmptyState title="Chưa có lượt nộp bài" hint="Chưa ghi nhận bài thi nào hoàn thành." />
                     )}
                   </div>
                 </div>
